@@ -44,36 +44,24 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    UI[React Clinical Workspace<br/>动态调查 · 数据目录 · 数据理解]
-    API[FastAPI Control Plane<br/>鉴权 · 生命周期 · Agent Runtime]
-    Q[Quarantine<br/>原始文件隔离区]
-    G[Domain Registry<br/>版本化数据域插件]
-    P[Published Domain Store<br/>通用受治理发布区]
-    DBT[dbt Analytics Models<br/>专用分析模型]
-    PG[(PostgreSQL 18)]
-    LLM[DeepSeek / GPT / Claude / GLM / Kimi]
-    GRAPH[Pydantic Graph + MCP Gateway<br/>类型化调查与工具治理]
-    REDIS[(Redis<br/>缓存 · 检查点 · 幂等锁)]
-    TEMPORAL[Temporal Workflow / Worker<br/>长流程与审批恢复]
-    OUTBOX[Temporal Outbox Dispatcher<br/>审批信号自动投递]
-    TRACE[OpenTelemetry / Logfire<br/>脱敏运行追踪]
-    HITL[Human Approval<br/>人工审批]
+    UI[React Workspace] --> API[FastAPI Control Plane]
 
-    UI --> API
-    API --> Q
-    Q --> G
-    G --> P
-    P --> DBT
-    DBT --> PG
-    API -->|仅结构化动作| LLM
-    API -->|参数化只读查询| PG
-    API --> GRAPH
-    GRAPH --> REDIS
-    GRAPH --> TEMPORAL
-    OUTBOX --> TEMPORAL
-    GRAPH --> TRACE
-    TEMPORAL --> HITL
-    HITL --> PG
+    API --> DATA[数据治理<br/>Quarantine → Registry → Published → dbt]
+    DATA --> PG[(PostgreSQL 18)]
+
+    API -->|结构化计划| LLM[DeepSeek / GPT / Claude<br/>GLM / Kimi]
+    LLM --> GRAPH[Pydantic Graph<br/>+ MCP Gateway]
+    GRAPH -->|参数化只读查询| PG
+    GRAPH <-->|缓存 · 检查点 · 幂等| REDIS[(Redis)]
+    GRAPH --> TRACE[OpenTelemetry / Logfire<br/>脱敏运行追踪]
+
+    API -->|可选长流程| TEMPORAL[Temporal Workflow / Worker]
+    TEMPORAL -->|执行调查| GRAPH
+    GRAPH -->|报告草稿| PG
+    UI -->|人工审批| API
+    API -->|审批决定 + Outbox| PG
+    PG --> OUTBOX[Outbox Dispatcher]
+    OUTBOX -->|审批信号| TEMPORAL
 ```
 
 两层数据表示避免“万能大表”：
