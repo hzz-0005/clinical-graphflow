@@ -1,0 +1,23 @@
+version: 2
+models:
+  - name: dim_trials
+    columns:
+      - name: trial_id
+        data_tests: [not_null, unique]
+  - name: dim_sites
+    columns:
+      - name: site_id
+        data_tests: [not_null, unique]
+  - name: dim_participants
+    columns:
+      - name: participant_id
+        data_tests: [not_null, unique]
+  - name: fct_outcomes
+    columns:
+      - name: assessment_id
+        data_tests: [not_null, unique]
+  - name: fct_exposures
+    columns:
+      - name: exposure_id
+        data_tests: [not_null, unique]
+

@@ -1,0 +1,21 @@
+version: 2
+models:
+  - name: mart_study_registry
+    columns:
+      - name: study_id
+        data_tests: [not_null, unique]
+  - name: mart_faers_signal
+    columns:
+      - name: medicinal_product
+        data_tests: [not_null]
+      - name: reaction_term
+        data_tests: [not_null]
+  - name: mart_ehr_patient_summary
+    columns:
+      - name: patient_id
+        data_tests: [not_null, unique]
+  - name: mart_drug_labels
+    columns:
+      - name: label_id
+        data_tests: [not_null, unique]
+

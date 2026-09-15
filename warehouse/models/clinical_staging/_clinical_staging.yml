@@ -1,0 +1,66 @@
+version: 2
+models:
+  - name: stg_public_ehr_observations
+    description: >-
+      Batch-bound, published Synthea OBSERVATION rows. This staging relation retains
+      patient/event keys for governed downstream aggregation and is not part of the
+      planner-facing public mart catalog.
+    columns:
+      - name: batch_id
+        data_tests: [not_null]
+      - name: batch_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [published]
+      - name: content_hash
+        data_tests: [not_null]
+      - name: domain_name
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [OBSERVATION]
+      - name: domain_version
+        data_tests: [not_null]
+      - name: row_key
+        data_tests: [not_null]
+      - name: observed_at_parse_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [valid, invalid, missing]
+      - name: numeric_parse_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [numeric, non_numeric, missing]
+  - name: stg_published_cdisc_records
+    description: Published and de-duplicated CDISC efficacy records only.
+    columns:
+      - name: participant_id
+        data_tests: [not_null, unique]
+      - name: trial_id
+        data_tests: [not_null]
+      - name: source_batch_id
+        data_tests: [not_null]
+  - name: stg_participants
+    columns:
+      - name: participant_id
+        data_tests: [not_null, unique]
+  - name: stg_randomization_assignments
+    columns:
+      - name: participant_id
+        data_tests: [not_null, unique]
+  - name: stg_outcome_assessments
+    columns:
+      - name: assessment_id
+        data_tests: [not_null, unique]
+  - name: stg_treatment_exposures
+    columns:
+      - name: exposure_id
+        data_tests: [not_null, unique]
+

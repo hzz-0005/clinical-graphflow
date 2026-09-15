@@ -1,0 +1,13 @@
+FROM python:3.13-slim
+
+WORKDIR /code
+
+COPY pyproject.toml /code/pyproject.toml
+COPY app /code/app
+
+# The Temporal worker is an opt-in deployment profile; the API still keeps the client disabled by
+# configuration unless INSIGHTFLOW_TEMPORAL_ENABLED=true.
+RUN pip install --no-cache-dir ".[dev,runtime,temporal]"
+
+CMD ["python", "-m", "app.clinical.temporal_worker"]
+

@@ -1,0 +1,49 @@
+version: 2
+models:
+  - name: mart_trial_population
+    columns:
+      - name: participant_id
+        data_tests: [not_null, unique]
+  - name: mart_week12_efficacy
+    columns:
+      - name: participant_id
+        data_tests: [not_null, unique]
+  - name: mart_randomization_balance
+    columns:
+      - name: participant_id
+        data_tests: [not_null, unique]
+  - name: mart_missingness
+    columns:
+      - name: participant_id
+        data_tests: [not_null, unique]
+  - name: mart_treatment_exposure
+    columns:
+      - name: participant_id
+        data_tests: [not_null, unique]
+  - name: mart_site_quality
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "trial_id || '|' || site_id || '|' || arm"
+  - name: mart_safety_summary
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "trial_id || '|' || arm"
+  - name: mart_safety_trend
+    columns:
+      - name: trial_id
+        data_tests: [not_null]
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "trial_id || '|' || region || '|' || arm || '|' || event_month"
+  - name: mart_visit_windows
+    columns:
+      - name: trial_id
+        data_tests: [not_null]
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "trial_id || '|' || site_id || '|' || arm || '|' || visit_week"
+

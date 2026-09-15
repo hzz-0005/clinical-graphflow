@@ -1,0 +1,10 @@
+# Minimal development-only dynamic configuration for the optional V22 Temporal cluster.
+# Do not reuse this file as a production policy; production limits belong in a reviewed cluster
+# configuration and should be managed outside the application repository.
+limit.maxIDLength:
+  - value: 255
+    constraints: {}
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+    constraints: {}
+

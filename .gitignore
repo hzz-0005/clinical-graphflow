@@ -1,0 +1,24 @@
+.env
+.worktrees/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+dist/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+warehouse/target/
+warehouse/logs/
+warehouse/.user.yml
+*.log
+.data/
+.ccs/
+archive/
+
+# Internal acceptance material intentionally kept out of the public repository.
+docs/V24_DEEPSEEK_*.md
+docs/DEEPSEEK_*.md
+scripts/run_*_eval.py
+

@@ -1,0 +1,590 @@
+version: 1
+domains:
+  - name: DM
+    standard: SDTM
+    version: "1"
+    grain: one participant
+    keys: [STUDYID, USUBJID]
+    aliases: [demographics, population, 人口学, 受试者主数据]
+    fields:
+      STUDYID: {data_type: identifier, required: true, aliases: [study, trial, trial_id, 试验编号]}
+      USUBJID: {data_type: identifier, required: true, aliases: [subject, subject_id, participant_id, 受试者编号]}
+      SITEID: {data_type: identifier, required: true, aliases: [site, center, center_id, 中心编号]}
+      ARM: {data_type: enum, required: true, aliases: [group, treatment_group, 分组], controlled_values: [control, treatment]}
+
+  - name: ADSL
+    standard: ADaM
+    version: "1"
+    grain: one analysis participant
+    keys: [STUDYID, USUBJID]
+    aliases: [subject level analysis, analysis population, 受试者级分析]
+    fields:
+      STUDYID: {data_type: identifier, required: true, aliases: [study, trial, trial_id, 试验编号]}
+      USUBJID: {data_type: identifier, required: true, aliases: [subject, subject_id, participant_id, 受试者编号]}
+      REGION1: {data_type: enum, required: false, aliases: [region, area, 地区, 区域]}
+      ITTFL: {data_type: enum, required: false, aliases: [itt, 意向治疗集], controlled_values: [Y, N]}
+      SAFFL: {data_type: enum, required: false, aliases: [safety, 安全集], controlled_values: [Y, N]}
+      PPROTFL: {data_type: enum, required: false, aliases: [per_protocol, 符合方案集], controlled_values: [Y, N]}
+
+  - name: ADEFF
+    standard: ADaM
+    version: "1"
+    grain: one participant endpoint assessment
+    keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+    aliases: [efficacy analysis, endpoint result, 疗效分析, 终点结果]
+    fields:
+      STUDYID: {data_type: identifier, required: true, aliases: [study, trial, trial_id, 试验编号]}
+      USUBJID: {data_type: identifier, required: true, aliases: [subject, subject_id, participant_id, 受试者编号]}
+      PARAMCD: {data_type: enum, required: true, aliases: [param, parameter, endpoint, 指标, 终点]}
+      AVISIT: {data_type: enum, required: true, aliases: [visit, analysis_visit, 访视]}
+      BASE: {data_type: decimal, required: false, aliases: [baseline, 基线值]}
+      AVAL: {data_type: decimal, required: true, aliases: [result, value, 结果值]}
+      CHG: {data_type: decimal, required: false, aliases: [change, 变化值]}
+
+  - name: AE
+    standard: SDTM
+    version: "1"
+    grain: one adverse event per participant sequence
+    keys: [STUDYID, USUBJID, AESEQ]
+    aliases: [adverse event, serious adverse event, 不良事件, 严重不良事件]
+    fields:
+      STUDYID: {data_type: identifier, required: true, aliases: [study, trial, trial_id, 试验编号]}
+      USUBJID: {data_type: identifier, required: true, aliases: [subject, subject_id, participant_id, 受试者编号]}
+      AESEQ: {data_type: integer, required: true, aliases: [event_sequence, sequence, seq, 事件序号]}
+      AETERM: {data_type: string, required: true, aliases: [event_term, adverse_event, event, 不良事件名称]}
+      AESTDTC: {data_type: datetime, required: false, aliases: [start_date, onset_date, 开始日期]}
+      AESER: {data_type: enum, required: false, aliases: [serious_flag, serious, 严重标志], controlled_values: [Y, N]}
+
+  - name: LB
+    standard: SDTM
+    version: "1"
+    grain: one laboratory test result per participant and time
+    keys: [STUDYID, USUBJID, LBSEQ]
+    aliases: [laboratory, lab result, 实验室检查, 检验结果]
+    fields:
+      STUDYID: {data_type: identifier, required: true, aliases: [study, trial, trial_id, 试验编号]}
+      USUBJID: {data_type: identifier, required: true, aliases: [subject, subject_id, participant_id, 受试者编号]}
+      LBSEQ: {data_type: integer, required: true, aliases: [lab_sequence, sequence, 检验序号]}
+      LBTESTCD: {data_type: enum, required: true, aliases: [test_code, lab_test, 检验项目]}
+      LBORRES: {data_type: string, required: true, aliases: [result, original_result, 检验结果]}
+      LBORRESU: {data_type: string, required: false, aliases: [unit, result_unit, 单位]}
+      LBDTC: {data_type: datetime, required: false, aliases: [collected_at, test_date, 采集日期]}
+
+  - name: EX
+    standard: SDTM
+    version: "1"
+    grain: one treatment exposure interval per participant
+    keys: [STUDYID, USUBJID, EXSEQ]
+    aliases: [exposure, treatment exposure, 给药, 治疗暴露]
+    fields:
+      STUDYID: {data_type: identifier, required: true, aliases: [study, trial, trial_id, 试验编号]}
+      USUBJID: {data_type: identifier, required: true, aliases: [subject, subject_id, participant_id, 受试者编号]}
+      EXSEQ: {data_type: integer, required: true, aliases: [exposure_sequence, sequence, 给药序号]}
+      EXTRT: {data_type: string, required: true, aliases: [treatment, drug, 治疗名称]}
+      EXDOSE: {data_type: decimal, required: false, aliases: [dose, 剂量]}
+      EXDOSU: {data_type: string, required: false, aliases: [dose_unit, 剂量单位]}
+      EXSTDTC: {data_type: datetime, required: false, aliases: [start_date, 给药开始日期]}
+
+  # Derived execution-quality mart / 研究执行质量派生分析域。
+  # This is intentionally separate from LB (laboratory results): protocol
+  # deviations and specimen temperature excursions are operational quality
+  # signals, not laboratory measurements.
+  - name: SITE_QUALITY
+    standard: InsightFlow derived mart
+    version: "1"
+    grain: one study site and treatment arm
+    keys: [TRIAL_ID, SITE_ID, ARM]
+    aliases: [site quality, execution quality, protocol quality, 研究中心质量, 方案执行质量]
+    fields:
+      TRIAL_ID: {data_type: identifier, required: true, aliases: [study, trial, trial_id, 试验编号]}
+      SITE_ID: {data_type: identifier, required: true, aliases: [site, site_id, center, center_id, 中心编号]}
+      REGION: {data_type: enum, required: false, aliases: [region, area, 地区, 区域]}
+      ARM: {data_type: enum, required: true, aliases: [group, treatment_arm, treatment_group, 分组]}
+      PARTICIPANT_COUNT: {data_type: integer, required: true, aliases: [sample_size, participant_count, 入组人数]}
+      MAJOR_DEVIATION_PARTICIPANTS: {data_type: integer, required: true, aliases: [major_deviations, major_deviation_participants, 重大方案偏离人数]}
+      TEMPERATURE_EXCURSIONS: {data_type: integer, required: true, aliases: [temperature_excursions, temperature_excursion_count, 温度超限次数]}
+      MAXIMUM_EXCURSION_TEMPERATURE_C: {data_type: decimal, required: false, aliases: [maximum_excursion_temperature_c, max_temperature, 最高超限温度]}
+
+  # Stable study core / 稳定研究核心。These records describe a study and its design;
+  # they are not participant-level efficacy observations.
+  - name: STUDY
+    standard: ClinicalTrials.gov
+    version: "1"
+    grain: one registered clinical study
+    keys: [STUDY_ID]
+    aliases: [studies, trial registry, study metadata, 研究注册, 研究元数据]
+    fields:
+      STUDY_ID: {data_type: identifier, required: true, aliases: [study_id, nct_id, nctid, 研究编号]}
+      BRIEF_TITLE: {data_type: string, required: true, aliases: [brief_title, title, 研究标题]}
+      STUDY_TYPE: {data_type: enum, required: false, aliases: [study_type, 研究类型]}
+      OVERALL_STATUS: {data_type: enum, required: false, aliases: [overall_status, status, 研究状态]}
+      PHASES: {data_type: string, required: false, aliases: [phases, phase, 分期]}
+      ENROLLMENT_COUNT: {data_type: integer, required: false, aliases: [enrollment_count, enrollment, 入组人数]}
+      ENROLLMENT_TYPE: {data_type: enum, required: false, aliases: [enrollment_type, 入组计数类型]}
+      START_DATE: {data_type: string, required: false, aliases: [start_date, 研究开始日期]}
+      COMPLETION_DATE: {data_type: string, required: false, aliases: [completion_date, 研究完成日期]}
+      LEAD_SPONSOR: {data_type: string, required: false, aliases: [lead_sponsor, sponsor, 申办方]}
+      CONDITIONS: {data_type: string, required: false, aliases: [conditions, condition, 疾病领域]}
+
+  - name: INTERVENTION
+    standard: ClinicalTrials.gov
+    version: "1"
+    grain: one intervention per registered study
+    keys: [STUDY_ID, INTERVENTION_ID]
+    aliases: [interventions, study intervention, 干预措施, 研究干预]
+    relationships:
+      - {target_domain: STUDY, local: [STUDY_ID], remote: [STUDY_ID]}
+    fields:
+      STUDY_ID: {data_type: identifier, required: true, aliases: [study_id, nct_id, nctid, 研究编号]}
+      INTERVENTION_ID: {data_type: identifier, required: true, aliases: [intervention_id, 干预编号]}
+      INTERVENTION_TYPE:
+        data_type: enum
+        required: true
+        aliases: [intervention_type, type, 干预类型]
+        controlled_values: [BEHAVIORAL, BIOLOGICAL, COMBINATION_PRODUCT, DEVICE, DIAGNOSTIC_TEST, DIETARY_SUPPLEMENT, DRUG, GENETIC, PROCEDURE, RADIATION, OTHER]
+      INTERVENTION_NAME: {data_type: string, required: true, aliases: [intervention_name, name, 干预名称]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [description, 干预说明]}
+      OTHER_NAMES: {data_type: string, required: false, aliases: [other_names, aliases, 其他名称]}
+
+  - name: OUTCOME
+    standard: ClinicalTrials.gov
+    version: "1"
+    grain: one registered outcome per study
+    keys: [STUDY_ID, OUTCOME_ID]
+    aliases: [outcomes, study outcome, outcome measure, 研究终点, 结局指标]
+    relationships:
+      - {target_domain: STUDY, local: [STUDY_ID], remote: [STUDY_ID]}
+    fields:
+      STUDY_ID: {data_type: identifier, required: true, aliases: [study_id, nct_id, nctid, 研究编号]}
+      OUTCOME_ID: {data_type: identifier, required: true, aliases: [outcome_id, 终点编号]}
+      OUTCOME_TYPE: {data_type: enum, required: true, aliases: [outcome_type, type, 终点类型], controlled_values: [PRIMARY, SECONDARY, OTHER]}
+      MEASURE: {data_type: string, required: true, aliases: [measure, outcome_measure, 测量指标]}
+      TIME_FRAME: {data_type: string, required: false, aliases: [time_frame, timeframe, 时间窗]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [description, 终点说明]}
+
+  # Observational safety signal plugin / 观察性安全信号插件。
+  # Drug and reaction rows remain separate because FAERS does not encode pairwise causality.
+  - name: FAERS_REPORT
+    standard: openFDA FAERS
+    version: "1"
+    grain: one spontaneous safety report
+    keys: [SAFETY_REPORT_ID]
+    aliases: [faers_reports, safety reports, spontaneous report, 自发报告, 安全报告]
+    fields:
+      SAFETY_REPORT_ID: {data_type: identifier, required: true, aliases: [safety_report_id, safetyreportid, 报告编号]}
+      RECEIVED_DATE: {data_type: string, required: false, aliases: [received_date, receivedate, 接收日期]}
+      SERIOUS: {data_type: enum, required: false, aliases: [serious, 严重性]}
+      OCCUR_COUNTRY: {data_type: string, required: false, aliases: [occur_country, occurcountry, 发生国家]}
+      PATIENT_SEX: {data_type: enum, required: false, aliases: [patient_sex, patientsex, 患者性别]}
+      PATIENT_AGE: {data_type: decimal, required: false, aliases: [patient_age, patientonsetage, 患者年龄]}
+      PATIENT_AGE_UNIT: {data_type: enum, required: false, aliases: [patient_age_unit, patientonsetageunit, 年龄单位]}
+
+  - name: FAERS_DRUG
+    standard: openFDA FAERS
+    version: "1"
+    grain: one reported drug role within one safety report
+    keys: [SAFETY_REPORT_ID, DRUG_SEQUENCE]
+    aliases: [faers_drugs, reported drugs, 报告药物]
+    relationships:
+      - {target_domain: FAERS_REPORT, local: [SAFETY_REPORT_ID], remote: [SAFETY_REPORT_ID]}
+    fields:
+      SAFETY_REPORT_ID: {data_type: identifier, required: true, aliases: [safety_report_id, safetyreportid, 报告编号]}
+      DRUG_SEQUENCE: {data_type: integer, required: true, aliases: [drug_sequence, 药物序号]}
+      DRUG_ROLE: {data_type: enum, required: false, aliases: [drug_role, drugcharacterization, 药物角色]}
+      MEDICINAL_PRODUCT: {data_type: string, required: true, aliases: [medicinal_product, medicinalproduct, 药品名称]}
+      INDICATION: {data_type: string, required: false, aliases: [indication, drugindication, 适应症]}
+      ROUTE: {data_type: string, required: false, aliases: [route, drugadministrationroute, 给药途径]}
+      DOSE_TEXT: {data_type: string, required: false, aliases: [dose_text, drugdosagetext, 剂量文本]}
+
+  - name: FAERS_REACTION
+    standard: openFDA FAERS
+    version: "1"
+    grain: one reported reaction within one safety report
+    keys: [SAFETY_REPORT_ID, REACTION_SEQUENCE]
+    aliases: [faers_reactions, reported reactions, 报告反应]
+    relationships:
+      - {target_domain: FAERS_REPORT, local: [SAFETY_REPORT_ID], remote: [SAFETY_REPORT_ID]}
+    fields:
+      SAFETY_REPORT_ID: {data_type: identifier, required: true, aliases: [safety_report_id, safetyreportid, 报告编号]}
+      REACTION_SEQUENCE: {data_type: integer, required: true, aliases: [reaction_sequence, 反应序号]}
+      REACTION_TERM: {data_type: string, required: true, aliases: [reaction_term, reactionmeddrapt, 反应术语]}
+      REACTION_OUTCOME: {data_type: enum, required: false, aliases: [reaction_outcome, reactionoutcome, 反应结局]}
+
+  # Synthetic EHR plugins / 合成电子病历插件。These schemas accept Synthea-shaped
+  # records without pretending that synthetic patients are trial participants.
+  - name: PATIENT
+    standard: Synthea CSV
+    version: "1"
+    grain: one synthetic patient
+    keys: [PATIENT_ID]
+    aliases: [patients, synthetic patient, 合成患者, 患者主数据]
+    fields:
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [Id, patient_id, patient, 患者编号]}
+      BIRTH_DATE: {data_type: date, required: false, aliases: [BIRTHDATE, birth_date, 出生日期]}
+      DEATH_DATE: {data_type: date, required: false, aliases: [DEATHDATE, death_date, 死亡日期]}
+      GENDER: {data_type: enum, required: false, aliases: [GENDER, gender, 性别]}
+      RACE: {data_type: string, required: false, aliases: [RACE, race, 种族]}
+      ETHNICITY: {data_type: string, required: false, aliases: [ETHNICITY, ethnicity, 族裔]}
+
+  - name: ENCOUNTER
+    standard: Synthea CSV
+    version: "1"
+    grain: one encounter per synthetic patient
+    keys: [ENCOUNTER_ID]
+    aliases: [encounters, visit record, 就诊, 就诊记录]
+    fields:
+      ENCOUNTER_ID: {data_type: identifier, required: true, aliases: [Id, encounter_id, encounter, 就诊编号]}
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      START_TIME: {data_type: datetime, required: false, aliases: [START, start_time, 开始时间]}
+      STOP_TIME: {data_type: datetime, required: false, aliases: [STOP, stop_time, 结束时间]}
+      CODE: {data_type: string, required: false, aliases: [CODE, code, 编码]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [DESCRIPTION, description, 描述]}
+
+  - name: CONDITION
+    standard: Synthea CSV
+    version: "1"
+    grain: one condition episode per synthetic patient
+    keys: [PATIENT_ID, CODE, START_TIME]
+    aliases: [conditions, diagnoses, disease history, 诊断, 疾病史]
+    fields:
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      CODE: {data_type: string, required: true, aliases: [CODE, code, 诊断编码]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [DESCRIPTION, description, 诊断描述]}
+      START_TIME: {data_type: datetime, required: true, aliases: [START, start_time, 开始时间]}
+      STOP_TIME: {data_type: datetime, required: false, aliases: [STOP, stop_time, 结束时间]}
+
+  - name: MEDICATION
+    standard: Synthea CSV
+    version: "1"
+    grain: one medication exposure per synthetic patient
+    keys: [PATIENT_ID, CODE, START_TIME]
+    aliases: [medications, medicines, prescriptions, 用药, 处方]
+    fields:
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      CODE: {data_type: string, required: true, aliases: [CODE, code, 药物编码]}
+      DESCRIPTION: {data_type: string, required: true, aliases: [DESCRIPTION, description, 药物名称]}
+      START_TIME: {data_type: datetime, required: false, aliases: [START, start_time, 开始时间]}
+      STOP_TIME: {data_type: datetime, required: false, aliases: [STOP, stop_time, 结束时间]}
+
+  - name: PROCEDURE
+    standard: Synthea CSV
+    version: "1"
+    grain: one procedure per synthetic patient
+    keys: [PATIENT_ID, CODE, START_TIME]
+    aliases: [procedures, surgery, clinical procedure, 手术, 操作, 医疗操作]
+    fields:
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      CODE: {data_type: string, required: true, aliases: [CODE, code, 操作编码]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [DESCRIPTION, description, 操作名称]}
+      START_TIME: {data_type: datetime, required: true, aliases: [START, start_time, 开始时间]}
+      STOP_TIME: {data_type: datetime, required: false, aliases: [STOP, stop_time, 结束时间]}
+
+  - name: OBSERVATION
+    standard: Synthea CSV
+    version: "1"
+    grain: one clinical observation per synthetic patient and time
+    keys: [PATIENT_ID, CODE, OBSERVED_AT]
+    aliases: [observations, measurements, vital signs, 观察指标, 测量结果]
+    fields:
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      OBSERVED_AT: {data_type: datetime, required: true, aliases: [DATE, observed_at, 测量时间]}
+      CODE: {data_type: string, required: true, aliases: [CODE, code, 指标编码]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [DESCRIPTION, description, 指标名称]}
+      VALUE: {data_type: string, required: false, aliases: [VALUE, value, 测量值]}
+      UNITS: {data_type: string, required: false, aliases: [UNITS, units, 单位]}
+
+  - name: DEVICE
+    standard: Synthea CSV
+    version: "1"
+    grain: one device use per synthetic patient
+    keys: [PATIENT_ID, DEVICE_ID]
+    aliases: [devices, implanted device, 医疗器械, 器械记录]
+    fields:
+      DEVICE_ID: {data_type: identifier, required: true, aliases: [UDI, device_id, device, 器械编号]}
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      START_TIME: {data_type: datetime, required: false, aliases: [START, start_time, 开始时间]}
+      STOP_TIME: {data_type: datetime, required: false, aliases: [STOP, stop_time, 结束时间]}
+      CODE: {data_type: string, required: false, aliases: [CODE, code, 器械编码]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [DESCRIPTION, description, 器械名称]}
+
+  - name: ALLERGY
+    standard: Synthea CSV
+    version: "1"
+    grain: one allergy episode per synthetic patient
+    keys: [PATIENT_ID, CODE, START_TIME]
+    aliases: [allergies, allergy records, 过敏, 过敏史]
+    fields:
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      CODE: {data_type: string, required: true, aliases: [CODE, code, 过敏编码]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [DESCRIPTION, description, 过敏描述]}
+      START_TIME: {data_type: datetime, required: true, aliases: [START, start_time, 开始时间]}
+      STOP_TIME: {data_type: datetime, required: false, aliases: [STOP, stop_time, 结束时间]}
+      CATEGORY: {data_type: string, required: false, aliases: [CATEGORY, category, 分类]}
+      REACTION_1: {data_type: string, required: false, aliases: [REACTION1, reaction_1, 反应编码1]}
+      SEVERITY_1: {data_type: string, required: false, aliases: [SEVERITY1, severity_1, 严重程度1]}
+
+  - name: CAREPLAN
+    standard: Synthea CSV
+    version: "1"
+    grain: one care plan per synthetic patient
+    keys: [CAREPLAN_ID]
+    aliases: [careplans, care plans, 照护计划, 治疗计划]
+    fields:
+      CAREPLAN_ID: {data_type: identifier, required: true, aliases: [Id, careplan_id, 计划编号]}
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      CODE: {data_type: string, required: true, aliases: [CODE, code, 计划编码]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [DESCRIPTION, description, 计划描述]}
+      START_TIME: {data_type: datetime, required: false, aliases: [START, start_time, 开始时间]}
+      STOP_TIME: {data_type: datetime, required: false, aliases: [STOP, stop_time, 结束时间]}
+      REASON_CODE: {data_type: string, required: false, aliases: [REASONCODE, reason_code, 原因编码]}
+      REASON_DESCRIPTION: {data_type: string, required: false, aliases: [REASONDESCRIPTION, reason_description, 原因描述]}
+
+  - name: IMMUNIZATION
+    standard: Synthea CSV
+    version: "1"
+    grain: one immunization per synthetic patient and time
+    keys: [PATIENT_ID, CODE, ADMINISTERED_AT]
+    aliases: [immunizations, vaccines, vaccination, 免疫接种, 疫苗接种]
+    fields:
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      ADMINISTERED_AT: {data_type: datetime, required: true, aliases: [DATE, administered_at, 接种时间]}
+      CODE: {data_type: string, required: true, aliases: [CODE, code, 疫苗编码]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [DESCRIPTION, description, 疫苗名称]}
+      BASE_COST: {data_type: decimal, required: false, aliases: [BASE_COST, base_cost, 基础费用]}
+
+  - name: IMAGING_STUDY
+    standard: Synthea CSV
+    version: "1"
+    grain: one imaging instance per synthetic patient
+    keys: [IMAGING_ID]
+    aliases: [imaging_studies, imaging studies, medical imaging, 医学影像, 影像检查]
+    fields:
+      IMAGING_ID: {data_type: identifier, required: true, aliases: [Id, imaging_id, 影像编号]}
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      STUDY_DATE: {data_type: datetime, required: true, aliases: [DATE, study_date, 检查时间]}
+      SERIES_UID: {data_type: identifier, required: false, aliases: [SERIES_UID, series_uid, 序列编号]}
+      BODY_SITE_CODE: {data_type: string, required: false, aliases: [BODYSITE_CODE, body_site_code, 部位编码]}
+      BODY_SITE_DESCRIPTION: {data_type: string, required: false, aliases: [BODYSITE_DESCRIPTION, body_site_description, 部位描述]}
+      MODALITY_CODE: {data_type: string, required: false, aliases: [MODALITY_CODE, modality_code, 模态编码]}
+      MODALITY_DESCRIPTION: {data_type: string, required: false, aliases: [MODALITY_DESCRIPTION, modality_description, 模态描述]}
+      PROCEDURE_CODE: {data_type: string, required: false, aliases: [PROCEDURE_CODE, procedure_code, 操作编码]}
+
+  - name: SUPPLY
+    standard: Synthea CSV
+    version: "1"
+    grain: one supplied item per synthetic patient and time
+    keys: [PATIENT_ID, CODE, SUPPLIED_AT]
+    aliases: [supplies, medical supplies, 医疗耗材, 供应记录]
+    fields:
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, 患者编号]}
+      ENCOUNTER_ID: {data_type: identifier, required: false, aliases: [ENCOUNTER, encounter_id, 就诊编号]}
+      SUPPLIED_AT: {data_type: datetime, required: true, aliases: [DATE, supplied_at, 供应时间]}
+      CODE: {data_type: string, required: true, aliases: [CODE, code, 耗材编码]}
+      DESCRIPTION: {data_type: string, required: false, aliases: [DESCRIPTION, description, 耗材名称]}
+      QUANTITY: {data_type: integer, required: false, aliases: [QUANTITY, quantity, 数量]}
+
+  # Synthea financial and care-network plugins / Synthea 财务与医疗网络插件。
+  # These domains are operational context, not participant-level efficacy or safety evidence.
+  - name: CLAIM
+    standard: Synthea CSV
+    version: "1"
+    grain: one healthcare claim
+    keys: [CLAIM_ID]
+    aliases: [claims, healthcare claims, billing claim, 医疗理赔, 医疗索赔]
+    relationships:
+      - {target_domain: PATIENT, local: [PATIENT_ID], remote: [PATIENT_ID]}
+      - {target_domain: PROVIDER, local: [PROVIDER_ID], remote: [PROVIDER_ID]}
+    fields:
+      CLAIM_ID: {data_type: identifier, required: true, aliases: [Id, claim_id, claim, 索赔编号]}
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENTID, patient_id, patient, 患者编号]}
+      PROVIDER_ID: {data_type: identifier, required: false, aliases: [PROVIDERID, provider_id, provider, 医疗服务提供者编号]}
+      PRIMARY_INSURANCE_ID: {data_type: identifier, required: false, aliases: [PRIMARYPATIENTINSURANCEID, primary_insurance_id, 主保险编号]}
+      SECONDARY_INSURANCE_ID: {data_type: identifier, required: false, aliases: [SECONDARYPATIENTINSURANCEID, secondary_insurance_id, 次保险编号]}
+      DEPARTMENT_ID: {data_type: identifier, required: false, aliases: [DEPARTMENTID, department_id, 科室编号]}
+      PATIENT_DEPARTMENT_ID: {data_type: identifier, required: false, aliases: [PATIENTDEPARTMENTID, patient_department_id, 患者科室编号]}
+      PRIMARY_DIAGNOSIS_CODE: {data_type: string, required: false, aliases: [DIAGNOSIS1, diagnosis1, primary_diagnosis, 首要诊断编码]}
+      REFERRING_PROVIDER_ID: {data_type: identifier, required: false, aliases: [REFERRINGPROVIDERID, referring_provider_id, 转诊医生编号]}
+      APPOINTMENT_ID: {data_type: identifier, required: false, aliases: [APPOINTMENTID, appointment_id, 预约编号]}
+      CURRENT_ILLNESS_DATE: {data_type: datetime, required: false, aliases: [CURRENTILLNESSDATE, current_illness_date, 当前疾病日期]}
+      SERVICE_DATE: {data_type: datetime, required: false, aliases: [SERVICEDATE, service_date, 服务日期]}
+      SUPERVISING_PROVIDER_ID: {data_type: identifier, required: false, aliases: [SUPERVISINGPROVIDERID, supervising_provider_id, 监管医生编号]}
+      STATUS_PRIMARY: {data_type: string, required: false, aliases: [STATUS1, status1, primary_status, 首要状态]}
+      STATUS_SECONDARY: {data_type: string, required: false, aliases: [STATUS2, status2, secondary_status, 次要状态]}
+      STATUS: {data_type: string, required: false, aliases: [STATUSP, status, claim_status, 索赔状态]}
+      OUTSTANDING_PRIMARY: {data_type: decimal, required: false, aliases: [OUTSTANDING1, outstanding1, primary_outstanding, 首要未结金额]}
+      OUTSTANDING_SECONDARY: {data_type: decimal, required: false, aliases: [OUTSTANDING2, outstanding2, secondary_outstanding, 次要未结金额]}
+      OUTSTANDING: {data_type: decimal, required: false, aliases: [OUTSTANDINGP, outstanding, outstanding_amount, 未结金额]}
+      LAST_BILLED_PRIMARY: {data_type: datetime, required: false, aliases: [LASTBILLEDDATE1, last_billed_date1, 首要最后开票日期]}
+      LAST_BILLED_SECONDARY: {data_type: datetime, required: false, aliases: [LASTBILLEDDATE2, last_billed_date2, 次要最后开票日期]}
+      LAST_BILLED: {data_type: datetime, required: false, aliases: [LASTBILLEDDATEP, last_billed_date, 最后开票日期]}
+      CLAIM_TYPE_PRIMARY: {data_type: string, required: false, aliases: [HEALTHCARECLAIMTYPEID1, healthcare_claim_type_id1, 首要理赔类型]}
+      CLAIM_TYPE_SECONDARY: {data_type: string, required: false, aliases: [HEALTHCARECLAIMTYPEID2, healthcare_claim_type_id2, 次要理赔类型]}
+
+  - name: CLAIM_TRANSACTION
+    standard: Synthea CSV
+    version: "1"
+    grain: one line item in a healthcare claim
+    keys: [TRANSACTION_ID]
+    aliases: [claims transactions, claim transactions, claim line items, 理赔交易, 理赔明细]
+    relationships:
+      - {target_domain: CLAIM, local: [CLAIM_ID], remote: [CLAIM_ID]}
+      - {target_domain: PATIENT, local: [PATIENT_ID], remote: [PATIENT_ID]}
+      - {target_domain: PROVIDER, local: [PROVIDER_ID], remote: [PROVIDER_ID]}
+    fields:
+      TRANSACTION_ID: {data_type: identifier, required: true, aliases: [ID, id, transaction_id, 交易编号]}
+      CLAIM_ID: {data_type: identifier, required: true, aliases: [CLAIMID, claim_id, claim, 索赔编号]}
+      CHARGE_ID: {data_type: identifier, required: false, aliases: [CHARGEID, charge_id, 费用编号]}
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENTID, patient_id, patient, 患者编号]}
+      TRANSACTION_TYPE: {data_type: string, required: false, aliases: [TYPE, type, transaction_type, 交易类型]}
+      AMOUNT: {data_type: decimal, required: false, aliases: [AMOUNT, amount, 金额]}
+      PAYMENT_METHOD: {data_type: string, required: false, aliases: [METHOD, method, payment_method, 支付方式]}
+      SERVICE_START: {data_type: datetime, required: false, aliases: [FROMDATE, from_date, service_start, 服务开始时间]}
+      SERVICE_END: {data_type: datetime, required: false, aliases: [TODATE, to_date, service_end, 服务结束时间]}
+      PLACE_OF_SERVICE: {data_type: identifier, required: false, aliases: [PLACEOFSERVICE, place_of_service, 服务地点编号]}
+      PROCEDURE_CODE: {data_type: string, required: false, aliases: [PROCEDURECODE, procedure_code, 操作编码]}
+      MODIFIER_1: {data_type: string, required: false, aliases: [MODIFIER1, modifier1, 修饰符1]}
+      MODIFIER_2: {data_type: string, required: false, aliases: [MODIFIER2, modifier2, 修饰符2]}
+      DIAGNOSIS_REF_1: {data_type: string, required: false, aliases: [DIAGNOSISREF1, diagnosis_ref1, 诊断引用1]}
+      DIAGNOSIS_REF_2: {data_type: string, required: false, aliases: [DIAGNOSISREF2, diagnosis_ref2, 诊断引用2]}
+      DIAGNOSIS_REF_3: {data_type: string, required: false, aliases: [DIAGNOSISREF3, diagnosis_ref3, 诊断引用3]}
+      DIAGNOSIS_REF_4: {data_type: string, required: false, aliases: [DIAGNOSISREF4, diagnosis_ref4, 诊断引用4]}
+      UNITS: {data_type: integer, required: false, aliases: [UNITS, units, 数量]}
+      DEPARTMENT_ID: {data_type: identifier, required: false, aliases: [DEPARTMENTID, department_id, 科室编号]}
+      NOTES: {data_type: string, required: false, aliases: [NOTES, notes, 备注]}
+      UNIT_AMOUNT: {data_type: decimal, required: false, aliases: [UNITAMOUNT, unit_amount, 单位金额]}
+      TRANSFER_OUT_ID: {data_type: identifier, required: false, aliases: [TRANSFEROUTID, transfer_out_id, 转出编号]}
+      TRANSFER_TYPE: {data_type: string, required: false, aliases: [TRANSFERTYPE, transfer_type, 转移类型]}
+      PAYMENTS: {data_type: decimal, required: false, aliases: [PAYMENTS, payments, 已支付金额]}
+      ADJUSTMENTS: {data_type: decimal, required: false, aliases: [ADJUSTMENTS, adjustments, 调整金额]}
+      TRANSFERS: {data_type: decimal, required: false, aliases: [TRANSFERS, transfers, 转移金额]}
+      OUTSTANDING: {data_type: decimal, required: false, aliases: [OUTSTANDING, outstanding, 未结金额]}
+      APPOINTMENT_ID: {data_type: identifier, required: false, aliases: [APPOINTMENTID, appointment_id, 预约编号]}
+      LINE_NOTE: {data_type: string, required: false, aliases: [LINENOTE, line_note, 明细备注]}
+      PATIENT_INSURANCE_ID: {data_type: identifier, required: false, aliases: [PATIENTINSURANCEID, patient_insurance_id, 患者保险编号]}
+      FEE_SCHEDULE_ID: {data_type: identifier, required: false, aliases: [FEESCHEDULEID, fee_schedule_id, 费用表编号]}
+      PROVIDER_ID: {data_type: identifier, required: false, aliases: [PROVIDERID, provider_id, provider, 医疗服务提供者编号]}
+      SUPERVISING_PROVIDER_ID: {data_type: identifier, required: false, aliases: [SUPERVISINGPROVIDERID, supervising_provider_id, 监管医生编号]}
+
+  - name: ORGANIZATION
+    standard: Synthea CSV
+    version: "1"
+    grain: one healthcare organization
+    keys: [ORGANIZATION_ID]
+    aliases: [organizations, healthcare organization, care organization, 医疗机构, 医疗组织]
+    fields:
+      ORGANIZATION_ID: {data_type: identifier, required: true, aliases: [Id, id, organization_id, 机构编号]}
+      ORGANIZATION_NAME: {data_type: string, required: true, aliases: [NAME, name, organization_name, 机构名称]}
+      ADDRESS: {data_type: string, required: false, aliases: [ADDRESS, address, 地址]}
+      CITY: {data_type: string, required: false, aliases: [CITY, city, 城市]}
+      STATE: {data_type: string, required: false, aliases: [STATE, state, 州省]}
+      ZIP: {data_type: string, required: false, aliases: [ZIP, zip, 邮编]}
+      LATITUDE: {data_type: decimal, required: false, aliases: [LAT, lat, latitude, 纬度]}
+      LONGITUDE: {data_type: decimal, required: false, aliases: [LON, lon, longitude, 经度]}
+      PHONE: {data_type: string, required: false, aliases: [PHONE, phone, 电话]}
+      REVENUE: {data_type: decimal, required: false, aliases: [REVENUE, revenue, 收入]}
+      UTILIZATION: {data_type: integer, required: false, aliases: [UTILIZATION, utilization, 利用量]}
+      NPI: {data_type: identifier, required: false, aliases: [NPI, npi, 国家医疗提供者编号]}
+
+  - name: PAYER_TRANSITION
+    standard: Synthea CSV
+    version: "1"
+    grain: one insurance coverage interval per synthetic patient
+    keys: [PATIENT_ID, START_DATE]
+    aliases: [payer transitions, insurance transitions, coverage history, 保险变更, 保险历史]
+    relationships:
+      - {target_domain: PATIENT, local: [PATIENT_ID], remote: [PATIENT_ID]}
+      - {target_domain: PAYER, local: [PAYER_ID], remote: [PAYER_ID]}
+    fields:
+      PATIENT_ID: {data_type: identifier, required: true, aliases: [PATIENT, patient_id, patient, 患者编号]}
+      MEMBER_ID: {data_type: identifier, required: false, aliases: [MEMBERID, member_id, 会员编号]}
+      START_DATE: {data_type: datetime, required: true, aliases: [START_DATE, start_date, start, 生效时间]}
+      END_DATE: {data_type: datetime, required: false, aliases: [END_DATE, end_date, end, 结束时间]}
+      PAYER_ID: {data_type: identifier, required: false, aliases: [PAYER, payer, payer_id, 付款方编号]}
+      SECONDARY_PAYER_ID: {data_type: identifier, required: false, aliases: [SECONDARY_PAYER, secondary_payer, 次要付款方编号]}
+      PLAN_OWNERSHIP: {data_type: string, required: false, aliases: [PLAN_OWNERSHIP, plan_ownership, 计划所有权]}
+      OWNER_NAME: {data_type: string, required: false, aliases: [OWNER_NAME, owner_name, 所有人名称]}
+
+  - name: PAYER
+    standard: Synthea CSV
+    version: "1"
+    grain: one insurance payer
+    keys: [PAYER_ID]
+    aliases: [payers, insurance payer, insurer, 付款方, 保险机构]
+    fields:
+      PAYER_ID: {data_type: identifier, required: true, aliases: [Id, id, payer_id, 付款方编号]}
+      PAYER_NAME: {data_type: string, required: true, aliases: [NAME, name, payer_name, 付款方名称]}
+      OWNERSHIP: {data_type: string, required: false, aliases: [OWNERSHIP, ownership, 所有制]}
+      ADDRESS: {data_type: string, required: false, aliases: [ADDRESS, address, 地址]}
+      CITY: {data_type: string, required: false, aliases: [CITY, city, 城市]}
+      STATE_HEADQUARTERED: {data_type: string, required: false, aliases: [STATE_HEADQUARTERED, state_headquartered, 总部州省]}
+      ZIP: {data_type: string, required: false, aliases: [ZIP, zip, 邮编]}
+      PHONE: {data_type: string, required: false, aliases: [PHONE, phone, 电话]}
+      AMOUNT_COVERED: {data_type: decimal, required: false, aliases: [AMOUNT_COVERED, amount_covered, 已覆盖金额]}
+      AMOUNT_UNCOVERED: {data_type: decimal, required: false, aliases: [AMOUNT_UNCOVERED, amount_uncovered, 未覆盖金额]}
+      REVENUE: {data_type: decimal, required: false, aliases: [REVENUE, revenue, 收入]}
+      COVERED_ENCOUNTERS: {data_type: integer, required: false, aliases: [COVERED_ENCOUNTERS, covered_encounters, 已覆盖就诊数]}
+      UNCOVERED_ENCOUNTERS: {data_type: integer, required: false, aliases: [UNCOVERED_ENCOUNTERS, uncovered_encounters, 未覆盖就诊数]}
+      COVERED_MEDICATIONS: {data_type: integer, required: false, aliases: [COVERED_MEDICATIONS, covered_medications, 已覆盖用药数]}
+      UNCOVERED_MEDICATIONS: {data_type: integer, required: false, aliases: [UNCOVERED_MEDICATIONS, uncovered_medications, 未覆盖用药数]}
+      COVERED_PROCEDURES: {data_type: integer, required: false, aliases: [COVERED_PROCEDURES, covered_procedures, 已覆盖操作数]}
+      UNCOVERED_PROCEDURES: {data_type: integer, required: false, aliases: [UNCOVERED_PROCEDURES, uncovered_procedures, 未覆盖操作数]}
+      COVERED_IMMUNIZATIONS: {data_type: integer, required: false, aliases: [COVERED_IMMUNIZATIONS, covered_immunizations, 已覆盖免疫接种数]}
+      UNCOVERED_IMMUNIZATIONS: {data_type: integer, required: false, aliases: [UNCOVERED_IMMUNIZATIONS, uncovered_immunizations, 未覆盖免疫接种数]}
+      UNIQUE_CUSTOMERS: {data_type: integer, required: false, aliases: [UNIQUE_CUSTOMERS, unique_customers, 独立客户数]}
+      QOLS_AVG: {data_type: decimal, required: false, aliases: [QOLS_AVG, qols_avg, 平均质量评分]}
+      MEMBER_MONTHS: {data_type: integer, required: false, aliases: [MEMBER_MONTHS, member_months, 会员月数]}
+
+  - name: PROVIDER
+    standard: Synthea CSV
+    version: "1"
+    grain: one healthcare provider
+    keys: [PROVIDER_ID]
+    aliases: [providers, healthcare providers, clinicians, 医疗服务提供者, 医生]
+    relationships:
+      - {target_domain: ORGANIZATION, local: [ORGANIZATION_ID], remote: [ORGANIZATION_ID]}
+    fields:
+      PROVIDER_ID: {data_type: identifier, required: true, aliases: [Id, id, provider_id, 提供者编号]}
+      ORGANIZATION_ID: {data_type: identifier, required: true, aliases: [ORGANIZATION, organization_id, 机构编号]}
+      PROVIDER_NAME: {data_type: string, required: true, aliases: [NAME, name, provider_name, 提供者姓名]}
+      GENDER: {data_type: enum, required: false, aliases: [GENDER, gender, 性别]}
+      SPECIALTY: {data_type: string, required: false, aliases: [SPECIALITY, SPECIALTY, speciality, specialty, 专业]}
+      ADDRESS: {data_type: string, required: false, aliases: [ADDRESS, address, 地址]}
+      CITY: {data_type: string, required: false, aliases: [CITY, city, 城市]}
+      STATE: {data_type: string, required: false, aliases: [STATE, state, 州省]}
+      ZIP: {data_type: string, required: false, aliases: [ZIP, zip, 邮编]}
+      LATITUDE: {data_type: decimal, required: false, aliases: [LAT, lat, latitude, 纬度]}
+      LONGITUDE: {data_type: decimal, required: false, aliases: [LON, lon, longitude, 经度]}
+      ENCOUNTERS: {data_type: integer, required: false, aliases: [ENCOUNTERS, encounters, 就诊数]}
+      PROCEDURES: {data_type: integer, required: false, aliases: [PROCEDURES, procedures, 操作数]}
+      NPI: {data_type: identifier, required: false, aliases: [NPI, npi, 国家医疗提供者编号]}
+
+  - name: DRUG_LABEL
+    standard: openFDA Structured Product Labeling
+    version: "1"
+    grain: one FDA product label version
+    keys: [LABEL_ID]
+    aliases: [drug_labels, product labeling, 药品说明书, 药品标签]
+    fields:
+      LABEL_ID: {data_type: identifier, required: true, aliases: [label_id, id, 标签编号]}
+      SET_ID: {data_type: identifier, required: false, aliases: [set_id, 标签集合编号]}
+      EFFECTIVE_TIME: {data_type: string, required: false, aliases: [effective_time, 生效时间]}
+      BRAND_NAMES: {data_type: string, required: false, aliases: [brand_names, brand_name, 商品名]}
+      GENERIC_NAMES: {data_type: string, required: false, aliases: [generic_names, generic_name, 通用名]}
+      MANUFACTURER_NAMES: {data_type: string, required: false, aliases: [manufacturer_names, manufacturer_name, 生产企业]}
+      PRODUCT_TYPES: {data_type: string, required: false, aliases: [product_types, product_type, 产品类型]}
+      ROUTES: {data_type: string, required: false, aliases: [routes, route, 给药途径]}
+      INDICATIONS_AND_USAGE: {data_type: string, required: false, aliases: [indications_and_usage, 适应症和用法]}
+      CONTRAINDICATIONS: {data_type: string, required: false, aliases: [contraindications, 禁忌症]}
+      BOXED_WARNING: {data_type: string, required: false, aliases: [boxed_warning, 黑框警告]}
+      WARNINGS: {data_type: string, required: false, aliases: [warnings, 警告]}
+      ADVERSE_REACTIONS: {data_type: string, required: false, aliases: [adverse_reactions, 不良反应]}
+

@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "insightflow-backend"
+version = "0.1.0"
+description = "InsightFlow governed analytics agent API"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "fastapi[standard]>=0.116,<1",
+  "httpx>=0.28,<1",
+  "openpyxl>=3.1,<4",
+  "pydantic-ai-slim[openai,anthropic]==2.43.0",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic-settings>=2.10,<3",
+  "pyyaml>=6,<7",
+  "sqlglot>=27,<29",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8.4,<9",
+]
+tabular = [
+  "pandas>=2.2,<3",
+  "pyarrow>=18,<22",
+]
+runtime = [
+  "redis>=6,<9",
+]
+temporal = [
+  "temporalio>=1.17,<2",
+]
+durable = [
+  "redis>=6,<9",
+  "temporalio>=1.17,<2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+

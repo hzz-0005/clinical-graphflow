@@ -1,0 +1,16 @@
+# Copy this file, replace every placeholder with a reviewed source, and run
+# scripts/load_ehr_reference_catalog.py as the PostgreSQL owner.  These values are
+# intentionally not medical ranges and must not be used for clinical interpretation.
+catalog_version: "replace-with-reviewed-version"
+review_status: "draft"
+source: "Replace with approved source"
+source_uri: "https://replace-with-approved-source.example/reference"
+source_version: "replace-with-source-version"
+effective_from: "2026-01-01"
+entries:
+  - concept_code: "REPLACE_WITH_CONCEPT_CODE"
+    unit: "REPLACE_WITH_UNIT"
+    low: 0
+    high: 1
+    population_context: "general"
+

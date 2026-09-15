@@ -1,0 +1,67 @@
+version: 2
+
+sources:
+  - name: clinical_raw
+    schema: clinical_raw
+    description: Fully synthetic clinical-trial source data for V4.
+    tables:
+      - name: clinical_trials
+        columns:
+          - name: trial_id
+            data_tests: [not_null, unique]
+      - name: trial_sites
+        columns:
+          - name: site_id
+            data_tests: [not_null, unique]
+          - name: trial_id
+            data_tests:
+              - relationships:
+                  arguments: {to: "source('clinical_raw', 'clinical_trials')", field: trial_id}
+      - name: participants
+        columns:
+          - name: participant_id
+            data_tests: [not_null, unique]
+          - name: site_id
+            data_tests:
+              - relationships:
+                  arguments: {to: "source('clinical_raw', 'trial_sites')", field: site_id}
+      - name: randomization_assignments
+        columns:
+          - name: participant_id
+            data_tests: [not_null, unique]
+      - name: baseline_assessments
+        columns:
+          - name: assessment_id
+            data_tests: [not_null, unique]
+      - name: outcome_assessments
+        columns:
+          - name: assessment_id
+            data_tests: [not_null, unique]
+      - name: treatment_exposures
+        columns:
+          - name: exposure_id
+            data_tests: [not_null, unique]
+      - name: adverse_events
+        columns:
+          - name: adverse_event_id
+            data_tests: [not_null, unique]
+      - name: protocol_deviations
+        columns:
+          - name: deviation_id
+            data_tests: [not_null, unique]
+      - name: participant_visits
+        columns:
+          - name: visit_id
+            data_tests: [not_null, unique]
+      - name: specimen_handling_events
+        columns:
+          - name: handling_event_id
+            data_tests: [not_null, unique]
+  - name: clinical_ingestion
+    schema: clinical_ingestion
+    description: De-identified CDISC batches admitted by the V5 publication gate.
+    tables:
+      - name: import_batches
+      - name: canonical_records
+      - name: domain_records
+

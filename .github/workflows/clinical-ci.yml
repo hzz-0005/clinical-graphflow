@@ -1,0 +1,63 @@
+name: Clinical CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e backend
+      - run: python -m compileall -q backend/app data_generator
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: insightflow
+          POSTGRES_USER: insightflow
+          POSTGRES_PASSWORD: clinical-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U insightflow -d insightflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: clinical-ci-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply database migrations twice (验证迁移可重复执行)
+        run: |
+          for pass in 1 2; do
+            for migration in database/init/*.sql; do
+              psql -h localhost -U insightflow -d insightflow -v ON_ERROR_STOP=1 -f "$migration"
+            done
+          done
+      - name: Verify lifecycle and job constraints (验证治理约束)
+        run: |
+          psql -h localhost -U insightflow -d insightflow -v ON_ERROR_STOP=1 -c "SELECT 1 FROM clinical_ingestion.import_batches LIMIT 0"
+          psql -h localhost -U insightflow -d insightflow -v ON_ERROR_STOP=1 -c "SELECT 1 FROM enterprise.clinical_investigation_jobs LIMIT 0"
+

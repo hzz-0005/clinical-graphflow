@@ -1,0 +1,158 @@
+version: 1
+domain: clinical_trial
+
+metrics:
+  - name: week12_mean_improvement
+    label: Week-12 Mean Improvement
+    aliases: [mean improvement, week 12 improvement, 十二周平均改善, 第十二周改善]
+    description: Mean Week-12 score minus baseline score in the intention-to-treat population with observed outcome.
+    owner: clinical_analytics
+    entity: participant
+    model: mart_week12_efficacy
+    time_dimension: scheduled_date
+    time_grain: trial_timepoint
+    dimensions: [trial_id, arm, region, site_id, age_band, sex, severity_band]
+    version: "1"
+    population: intention_to_treat
+    timepoint: week_12
+    estimand: mean(week12_outcome_score - baseline_score)
+    calculation:
+      type: mean
+      expression: week12_improvement_score
+    rules:
+      - Missing Week-12 outcomes are excluded from the mean and reported separately.
+      - ITT is the primary population.
+    forbidden_interpretations:
+      - Do not treat an unadjusted subgroup difference as a biological effect.
+      - Do not convert this metric into treatment advice.
+
+  - name: treatment_effect
+    label: Week-12 Treatment Effect
+    aliases: [treatment effect, efficacy difference, 十二周治疗效应, 亚洲亚组十二周治疗效应, 治疗效果差异]
+    description: Difference in mean Week-12 improvement between treatment and control in the ITT population.
+    owner: clinical_analytics
+    entity: trial_population
+    model: mart_week12_efficacy
+    time_dimension: scheduled_date
+    time_grain: trial_timepoint
+    dimensions: [trial_id, region, site_id, age_band, sex, severity_band]
+    version: "1"
+    population: intention_to_treat
+    timepoint: week_12
+    estimand: mean_improvement(treatment) - mean_improvement(control)
+    calculation:
+      type: difference_of_means
+      expression: treatment_mean - control_mean
+    rules:
+      - Return arm sample sizes, standard error, and 95 percent confidence interval.
+      - A subgroup result is exploratory until guardrails pass.
+    forbidden_interpretations:
+      - Do not infer that region or ethnicity is the cause.
+      - Do not use a confidence interval as individual treatment guidance.
+
+  - name: week12_missingness_rate
+    label: Week-12 Missingness Rate
+    aliases: [missingness, missing outcome, Week-12 missingness, 十二周缺失率, 结局缺失]
+    description: Randomized participants without a completed Week-12 assessment divided by randomized participants.
+    owner: clinical_data_management
+    entity: participant
+    model: mart_missingness
+    time_dimension: randomized_at
+    time_grain: trial_timepoint
+    dimensions: [trial_id, arm, region, site_id, missing_reason]
+    version: "1"
+    population: intention_to_treat
+    timepoint: week_12
+    estimand: missing_week12_participants / randomized_participants
+    calculation:
+      type: ratio
+      numerator: count distinct participant_id where week12_missing
+      denominator: count distinct participant_id
+    forbidden_interpretations:
+      - Do not assume missing outcomes have zero improvement.
+
+  - name: exposure_adherence_rate
+    label: Treatment Exposure Adherence Rate
+    aliases: [adherence, exposure adherence, dose adherence, 治疗依从率, 暴露依从率]
+    description: Actual cumulative dose divided by planned cumulative dose.
+    owner: clinical_operations
+    entity: participant
+    model: mart_treatment_exposure
+    time_dimension: enrolled_at
+    time_grain: trial_period
+    dimensions: [trial_id, arm, region, site_id]
+    version: "1"
+    population: exposed_population
+    timepoint: through_week_12
+    estimand: sum(actual_dose) / sum(planned_dose)
+    calculation:
+      type: ratio
+      numerator: sum actual_dose
+      denominator: sum planned_dose
+    forbidden_interpretations:
+      - Do not infer why a dose was missed without protocol evidence.
+
+  - name: protocol_deviation_rate
+    label: Major Protocol Deviation Rate
+    aliases: [protocol deviation, major deviation, 方案偏离率, 重大方案偏离]
+    description: Randomized participants with at least one major or critical deviation divided by randomized participants.
+    owner: clinical_quality
+    entity: participant
+    model: mart_site_quality
+    time_dimension: occurred_at
+    time_grain: trial_period
+    dimensions: [trial_id, arm, region, site_id, category]
+    version: "1"
+    population: intention_to_treat
+    estimand: participants_with_major_deviation / randomized_participants
+    calculation:
+      type: ratio
+      numerator: count distinct participant_id with major or critical deviation
+      denominator: count distinct randomized participant_id
+    forbidden_interpretations:
+      - Do not call every operational event a cause of efficacy change.
+
+  - name: serious_adverse_event_rate
+    label: Serious Adverse Event Rate
+    aliases: [SAE rate, serious adverse event, 严重不良事件率, SAE]
+    description: Exposed participants with at least one serious adverse event divided by exposed participants.
+    owner: clinical_safety
+    entity: participant
+    model: mart_safety_summary
+    time_dimension: started_at
+    time_grain: trial_period
+    dimensions: [trial_id, arm, region, site_id]
+    version: "1"
+    population: exposed_population
+    estimand: participants_with_serious_adverse_event / exposed_participants
+    calculation:
+      type: ratio
+      numerator: participants_with_serious_adverse_event
+      denominator: exposed_participants
+    forbidden_interpretations:
+      - Do not provide individual safety or dosing advice.
+
+  - name: adverse_event_rate
+    label: Adverse Event Rate
+    aliases: [AE rate, adverse event rate, safety event proportion, 不良事件发生率, 安全性事件比例, 不良事件比例]
+    description: Exposed participants with at least one adverse event divided by exposed participants, summarized by treatment arm.
+    owner: clinical_safety
+    entity: participant
+    model: mart_safety_summary
+    time_dimension: started_at
+    time_grain: trial_period
+    dimensions: [trial_id, arm]
+    version: "1"
+    population: exposed_population
+    estimand: participants_with_adverse_event / exposed_participants
+    calculation:
+      type: ratio
+      numerator: participants_with_adverse_event
+      denominator: exposed_participants
+    rules:
+      - The denominator is exposed participants for the selected trial and treatment arm.
+      - Serious adverse events are reported separately and are not inferred from the overall rate.
+    forbidden_interpretations:
+      - Do not infer causality or compare individual treatment risk from this descriptive aggregate.
+      - Do not provide individual safety or dosing advice.
+

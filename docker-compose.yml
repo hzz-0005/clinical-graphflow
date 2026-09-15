@@ -1,0 +1,296 @@
+name: insightflow-clinical
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-insightflow}
+      POSTGRES_USER: ${POSTGRES_USER:-insightflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD:?Set POSTGRES_READER_PASSWORD in .env}
+    ports: ["55432:5432"]
+    volumes:
+      - clinical_postgres_data:/var/lib/postgresql
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+  backend:
+    image: insightflow-clinical-backend
+    build: ./backend
+    environment:
+      BACKEND_DATABASE_URL: postgresql://insightflow_reader:${POSTGRES_READER_PASSWORD}@postgres:5432/insightflow
+      ENTERPRISE_DATABASE_URL: postgresql://${POSTGRES_USER:-insightflow}:${POSTGRES_PASSWORD}@postgres:5432/insightflow
+      SEMANTIC_DIR: /semantic
+      CDISC_PSEUDONYM_SALT: ${CDISC_PSEUDONYM_SALT:-local-development-change-me}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      INSIGHTFLOW_RUNTIME_VERSION: ${INSIGHTFLOW_RUNTIME_VERSION:-v17}
+      INSIGHTFLOW_V16_FALLBACK_OWNER: ${INSIGHTFLOW_V16_FALLBACK_OWNER:-}
+      INSIGHTFLOW_V16_FALLBACK_REASON: ${INSIGHTFLOW_V16_FALLBACK_REASON:-}
+      INSIGHTFLOW_V16_FALLBACK_UNTIL: ${INSIGHTFLOW_V16_FALLBACK_UNTIL:-}
+      INSIGHTFLOW_RUNTIME_PORTS: ${INSIGHTFLOW_RUNTIME_PORTS:-memory}
+      INSIGHTFLOW_REDIS_URL: ${INSIGHTFLOW_REDIS_URL:-redis://redis:6379/0}
+      INSIGHTFLOW_REDIS_NAMESPACE: ${INSIGHTFLOW_REDIS_NAMESPACE:-insightflow}
+      INSIGHTFLOW_RUNTIME_TTL_SECONDS: ${INSIGHTFLOW_RUNTIME_TTL_SECONDS:-3600}
+      INSIGHTFLOW_TELEMETRY: ${INSIGHTFLOW_TELEMETRY:-noop}
+      INSIGHTFLOW_TEMPORAL_TARGET: ${INSIGHTFLOW_TEMPORAL_TARGET:-temporal:7233}
+      INSIGHTFLOW_TEMPORAL_NAMESPACE: ${INSIGHTFLOW_TEMPORAL_NAMESPACE:-default}
+      INSIGHTFLOW_TEMPORAL_TASK_QUEUE: ${INSIGHTFLOW_TEMPORAL_TASK_QUEUE:-clinical-v20}
+      INSIGHTFLOW_TEMPORAL_ENABLED: ${INSIGHTFLOW_TEMPORAL_ENABLED:-false}
+      INSIGHTFLOW_APPROVAL_RESUME_SECRET: ${INSIGHTFLOW_APPROVAL_RESUME_SECRET:-}
+      INSIGHTFLOW_APPROVAL_RESUME_TTL_SECONDS: ${INSIGHTFLOW_APPROVAL_RESUME_TTL_SECONDS:-900}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_MAX_ATTEMPTS: ${INSIGHTFLOW_TEMPORAL_OUTBOX_MAX_ATTEMPTS:-5}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_POLL_SECONDS: ${INSIGHTFLOW_TEMPORAL_OUTBOX_POLL_SECONDS:-5}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_BATCH_SIZE: ${INSIGHTFLOW_TEMPORAL_OUTBOX_BATCH_SIZE:-20}
+      INSIGHTFLOW_INGESTION_PROVIDER: ${INSIGHTFLOW_INGESTION_PROVIDER:-rules}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      GLM_MODEL: ${GLM_MODEL:-}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      KIMI_MODEL: ${KIMI_MODEL:-}
+      CUSTOM_LLM_API_KEY: ${CUSTOM_LLM_API_KEY:-}
+      CUSTOM_LLM_MODEL: ${CUSTOM_LLM_MODEL:-}
+      CUSTOM_LLM_BASE_URL: ${CUSTOM_LLM_BASE_URL:-}
+      CLINICAL_INLINE_JOBS: "false"
+    ports: ["18000:8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./semantic:/semantic:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  clinical-worker:
+    image: insightflow-clinical-backend
+    build: ./backend
+    command: ["python", "-m", "app.clinical.worker"]
+    environment:
+      BACKEND_DATABASE_URL: postgresql://insightflow_reader:${POSTGRES_READER_PASSWORD}@postgres:5432/insightflow
+      ENTERPRISE_DATABASE_URL: postgresql://${POSTGRES_USER:-insightflow}:${POSTGRES_PASSWORD}@postgres:5432/insightflow
+      SEMANTIC_DIR: /semantic
+      CDISC_PSEUDONYM_SALT: ${CDISC_PSEUDONYM_SALT:-local-development-change-me}
+      INSIGHTFLOW_RUNTIME_VERSION: ${INSIGHTFLOW_RUNTIME_VERSION:-v17}
+      INSIGHTFLOW_V16_FALLBACK_OWNER: ${INSIGHTFLOW_V16_FALLBACK_OWNER:-}
+      INSIGHTFLOW_V16_FALLBACK_REASON: ${INSIGHTFLOW_V16_FALLBACK_REASON:-}
+      INSIGHTFLOW_V16_FALLBACK_UNTIL: ${INSIGHTFLOW_V16_FALLBACK_UNTIL:-}
+      INSIGHTFLOW_RUNTIME_PORTS: ${INSIGHTFLOW_RUNTIME_PORTS:-memory}
+      INSIGHTFLOW_REDIS_URL: ${INSIGHTFLOW_REDIS_URL:-redis://redis:6379/0}
+      INSIGHTFLOW_REDIS_NAMESPACE: ${INSIGHTFLOW_REDIS_NAMESPACE:-insightflow}
+      INSIGHTFLOW_RUNTIME_TTL_SECONDS: ${INSIGHTFLOW_RUNTIME_TTL_SECONDS:-3600}
+      INSIGHTFLOW_TELEMETRY: ${INSIGHTFLOW_TELEMETRY:-noop}
+      INSIGHTFLOW_TEMPORAL_TARGET: ${INSIGHTFLOW_TEMPORAL_TARGET:-temporal:7233}
+      INSIGHTFLOW_TEMPORAL_NAMESPACE: ${INSIGHTFLOW_TEMPORAL_NAMESPACE:-default}
+      INSIGHTFLOW_TEMPORAL_TASK_QUEUE: ${INSIGHTFLOW_TEMPORAL_TASK_QUEUE:-clinical-v20}
+      INSIGHTFLOW_TEMPORAL_ENABLED: ${INSIGHTFLOW_TEMPORAL_ENABLED:-false}
+      INSIGHTFLOW_APPROVAL_RESUME_SECRET: ${INSIGHTFLOW_APPROVAL_RESUME_SECRET:-}
+      INSIGHTFLOW_APPROVAL_RESUME_TTL_SECONDS: ${INSIGHTFLOW_APPROVAL_RESUME_TTL_SECONDS:-900}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_MAX_ATTEMPTS: ${INSIGHTFLOW_TEMPORAL_OUTBOX_MAX_ATTEMPTS:-5}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_POLL_SECONDS: ${INSIGHTFLOW_TEMPORAL_OUTBOX_POLL_SECONDS:-5}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_BATCH_SIZE: ${INSIGHTFLOW_TEMPORAL_OUTBOX_BATCH_SIZE:-20}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./semantic:/semantic:ro
+  frontend:
+    build: ./frontend
+    ports: ["55173:80"]
+    depends_on: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/ >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["56379:6379"]
+    volumes:
+      - clinical_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    profiles: ["durable", "temporal"]
+  clinical-temporal-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.temporal
+    command: ["python", "-m", "app.clinical.temporal_worker"]
+    environment:
+      BACKEND_DATABASE_URL: postgresql://insightflow_reader:${POSTGRES_READER_PASSWORD}@postgres:5432/insightflow
+      ENTERPRISE_DATABASE_URL: postgresql://${POSTGRES_USER:-insightflow}:${POSTGRES_PASSWORD}@postgres:5432/insightflow
+      SEMANTIC_DIR: /semantic
+      CDISC_PSEUDONYM_SALT: ${CDISC_PSEUDONYM_SALT:-local-development-change-me}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      GLM_MODEL: ${GLM_MODEL:-}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      KIMI_MODEL: ${KIMI_MODEL:-}
+      CUSTOM_LLM_API_KEY: ${CUSTOM_LLM_API_KEY:-}
+      CUSTOM_LLM_MODEL: ${CUSTOM_LLM_MODEL:-}
+      CUSTOM_LLM_BASE_URL: ${CUSTOM_LLM_BASE_URL:-}
+      INSIGHTFLOW_RUNTIME_VERSION: ${INSIGHTFLOW_RUNTIME_VERSION:-v17}
+      INSIGHTFLOW_V16_FALLBACK_OWNER: ${INSIGHTFLOW_V16_FALLBACK_OWNER:-}
+      INSIGHTFLOW_V16_FALLBACK_REASON: ${INSIGHTFLOW_V16_FALLBACK_REASON:-}
+      INSIGHTFLOW_V16_FALLBACK_UNTIL: ${INSIGHTFLOW_V16_FALLBACK_UNTIL:-}
+      INSIGHTFLOW_RUNTIME_PORTS: ${INSIGHTFLOW_RUNTIME_PORTS:-redis}
+      INSIGHTFLOW_REDIS_URL: ${INSIGHTFLOW_REDIS_URL:-redis://redis:6379/0}
+      INSIGHTFLOW_REDIS_NAMESPACE: ${INSIGHTFLOW_REDIS_NAMESPACE:-insightflow}
+      INSIGHTFLOW_RUNTIME_TTL_SECONDS: ${INSIGHTFLOW_RUNTIME_TTL_SECONDS:-3600}
+      INSIGHTFLOW_TELEMETRY: ${INSIGHTFLOW_TELEMETRY:-noop}
+      INSIGHTFLOW_TEMPORAL_TARGET: ${INSIGHTFLOW_TEMPORAL_TARGET:-temporal:7233}
+      INSIGHTFLOW_TEMPORAL_NAMESPACE: ${INSIGHTFLOW_TEMPORAL_NAMESPACE:-default}
+      INSIGHTFLOW_TEMPORAL_TASK_QUEUE: ${INSIGHTFLOW_TEMPORAL_TASK_QUEUE:-clinical-v20}
+      INSIGHTFLOW_TEMPORAL_ENABLED: ${INSIGHTFLOW_TEMPORAL_ENABLED:-false}
+      INSIGHTFLOW_APPROVAL_RESUME_SECRET: ${INSIGHTFLOW_APPROVAL_RESUME_SECRET:-}
+      INSIGHTFLOW_APPROVAL_RESUME_TTL_SECONDS: ${INSIGHTFLOW_APPROVAL_RESUME_TTL_SECONDS:-900}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_MAX_ATTEMPTS: ${INSIGHTFLOW_TEMPORAL_OUTBOX_MAX_ATTEMPTS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./semantic:/semantic:ro
+    profiles: ["temporal"]
+  clinical-temporal-outbox:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.temporal
+    command: ["python", "-m", "app.clinical.temporal_outbox_worker"]
+    environment:
+      BACKEND_DATABASE_URL: postgresql://insightflow_reader:${POSTGRES_READER_PASSWORD}@postgres:5432/insightflow
+      ENTERPRISE_DATABASE_URL: postgresql://${POSTGRES_USER:-insightflow}:${POSTGRES_PASSWORD}@postgres:5432/insightflow
+      SEMANTIC_DIR: /semantic
+      CDISC_PSEUDONYM_SALT: ${CDISC_PSEUDONYM_SALT:-local-development-change-me}
+      INSIGHTFLOW_RUNTIME_VERSION: ${INSIGHTFLOW_RUNTIME_VERSION:-v17}
+      INSIGHTFLOW_V16_FALLBACK_OWNER: ${INSIGHTFLOW_V16_FALLBACK_OWNER:-}
+      INSIGHTFLOW_V16_FALLBACK_REASON: ${INSIGHTFLOW_V16_FALLBACK_REASON:-}
+      INSIGHTFLOW_V16_FALLBACK_UNTIL: ${INSIGHTFLOW_V16_FALLBACK_UNTIL:-}
+      INSIGHTFLOW_RUNTIME_PORTS: ${INSIGHTFLOW_RUNTIME_PORTS:-redis}
+      INSIGHTFLOW_REDIS_URL: ${INSIGHTFLOW_REDIS_URL:-redis://redis:6379/0}
+      INSIGHTFLOW_REDIS_NAMESPACE: ${INSIGHTFLOW_REDIS_NAMESPACE:-insightflow}
+      INSIGHTFLOW_RUNTIME_TTL_SECONDS: ${INSIGHTFLOW_RUNTIME_TTL_SECONDS:-3600}
+      INSIGHTFLOW_TELEMETRY: ${INSIGHTFLOW_TELEMETRY:-noop}
+      INSIGHTFLOW_TEMPORAL_TARGET: ${INSIGHTFLOW_TEMPORAL_TARGET:-temporal:7233}
+      INSIGHTFLOW_TEMPORAL_NAMESPACE: ${INSIGHTFLOW_TEMPORAL_NAMESPACE:-default}
+      INSIGHTFLOW_TEMPORAL_TASK_QUEUE: ${INSIGHTFLOW_TEMPORAL_TASK_QUEUE:-clinical-v20}
+      INSIGHTFLOW_TEMPORAL_ENABLED: ${INSIGHTFLOW_TEMPORAL_ENABLED:-false}
+      INSIGHTFLOW_APPROVAL_RESUME_SECRET: ${INSIGHTFLOW_APPROVAL_RESUME_SECRET:-}
+      INSIGHTFLOW_APPROVAL_RESUME_TTL_SECONDS: ${INSIGHTFLOW_APPROVAL_RESUME_TTL_SECONDS:-900}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_MAX_ATTEMPTS: ${INSIGHTFLOW_TEMPORAL_OUTBOX_MAX_ATTEMPTS:-5}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_POLL_SECONDS: ${INSIGHTFLOW_TEMPORAL_OUTBOX_POLL_SECONDS:-5}
+      INSIGHTFLOW_TEMPORAL_OUTBOX_BATCH_SIZE: ${INSIGHTFLOW_TEMPORAL_OUTBOX_BATCH_SIZE:-20}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./semantic:/semantic:ro
+    profiles: ["temporal"]
+  temporal-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: temporal
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: ${TEMPORAL_POSTGRES_PASSWORD:-temporal-local-only}
+    volumes:
+      - clinical_temporal_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    profiles: ["temporal"]
+  temporal:
+    image: temporalio/auto-setup:${TEMPORAL_VERSION:-1.29.1}
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${TEMPORAL_POSTGRES_PASSWORD:-temporal-local-only}
+      POSTGRES_SEEDS: temporal-postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+      ENABLE_ES: "false"
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    volumes:
+      - ./infra/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    ports: ["57233:7233"]
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -lnt | grep -q ':7233 '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    profiles: ["temporal"]
+  temporal-ui:
+    image: temporalio/ui:${TEMPORAL_UI_VERSION:-2.34.0}
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:55173
+    depends_on:
+      temporal:
+        condition: service_started
+    ports: ["58080:8080"]
+    profiles: ["temporal"]
+  generator:
+    image: insightflow-clinical-backend
+    build: ./backend
+    entrypoint: ["python", "-m", "data_generator.clinical.generator"]
+    working_dir: /workspace
+    environment:
+      DATABASE_URL: postgresql://insightflow:${POSTGRES_PASSWORD}@postgres:5432/insightflow
+    volumes:
+      - ./:/workspace:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"]
+  dbt:
+    build: ./warehouse
+    working_dir: /usr/app
+    environment:
+      DBT_HOST: postgres
+      DBT_PORT: 5432
+      DBT_USER: ${POSTGRES_USER:-insightflow}
+      DBT_PASSWORD: ${POSTGRES_PASSWORD}
+      DBT_DATABASE: ${POSTGRES_DB:-insightflow}
+      DBT_SCHEMA: analytics
+    volumes:
+      - ./warehouse:/usr/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"]
+volumes:
+  clinical_postgres_data:
+  clinical_redis_data:
+  clinical_temporal_postgres_data:
+

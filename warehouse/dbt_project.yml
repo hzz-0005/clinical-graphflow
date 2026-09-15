@@ -1,0 +1,22 @@
+name: insightflow_clinical
+version: "4.1.0"
+config-version: 2
+profile: insightflow
+model-paths: ["models"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+vars:
+  analysis_as_of_date: "2026-09-01"
+models:
+  insightflow_clinical:
+    clinical_staging:
+      +schema: clinical_staging
+      +materialized: view
+    clinical_core:
+      +schema: clinical_core
+      +materialized: table
+    clinical_marts:
+      +schema: clinical_marts
+      +materialized: table
+
