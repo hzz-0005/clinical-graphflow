@@ -4,7 +4,7 @@
 
 InsightFlow Clinical 不是“给数据库套一个聊天框”，也不是让 LLM（大模型）自由生成 SQL。它把临床问题转成一个可复核的 Investigation（调查）：识别指标、读取已发布数据版本、生成假设、调用受治理工具、寻找支持与反证、披露缺失数据，最后输出 Evidence Chain（证据链）和待审批结论。
 
-当前本地完整版本：**V27 / Graph Edition**。这次稳定后会作为一个独立的 GitHub 开源仓库发布，不按内部 V 编号逐次创建远端版本。V16 的临床事实与 API 契约保持兼容；V17–V25 建立 PydanticAI + Pydantic Graph + MCP-compatible Gateway 的强类型、可恢复运行时；V26 增加 PostgreSQL 版本事务、幂等、CAS 与并发安全；V27 增加批次绑定的纵向 EHR 聚合、快照审计、隐私抑制和受保护的版本化 reference-range catalog。当前 Synthea 数据不携带经过审核的医学参考范围，因此未加载真实 catalog 时异常比例保持 `unknown`/`NULL`。数据目录说明见 [`docs/V15_DATA_CATALOG.md`](docs/V15_DATA_CATALOG.md)，运行时说明见 [`docs/V17_RUNTIME.md`](docs/V17_RUNTIME.md)，纵向 EHR 说明见 [`docs/V27_LONGITUDINAL_EHR.md`](docs/V27_LONGITUDINAL_EHR.md)，reference catalog 加载说明见 [`docs/V27_REFERENCE_RANGE_CATALOG.md`](docs/V27_REFERENCE_RANGE_CATALOG.md)。开发过程中的路线图、验收记录和临时排练资料不进入 GitHub 产品仓库。
+当前公开版本：**V3 / Graph Edition**。公开版本把内部迭代收敛为三个产品阶段：V1 建立临床数据与治理底座，V2 建立可恢复的 PydanticAI / Pydantic Graph 运行时，V3（当前）完成 PostgreSQL 并发安全、纵向 EHR、隐私抑制和版本化 reference-range catalog。当前 Synthea 数据不携带经过审核的医学参考范围，因此未加载真实 catalog 时异常比例保持 `unknown`/`NULL`。数据目录说明见 [`docs/V15_DATA_CATALOG.md`](docs/V15_DATA_CATALOG.md)，运行时说明见 [`docs/V17_RUNTIME.md`](docs/V17_RUNTIME.md)，纵向 EHR 说明见 [`docs/V27_LONGITUDINAL_EHR.md`](docs/V27_LONGITUDINAL_EHR.md)，reference catalog 加载说明见 [`docs/V27_REFERENCE_RANGE_CATALOG.md`](docs/V27_REFERENCE_RANGE_CATALOG.md)。开发过程中的路线图、验收记录和临时排练资料不进入 GitHub 产品仓库。
 
 ## 一眼看懂
 
@@ -162,35 +162,15 @@ V17 现在是同步 API 和动态后台 Job/Worker 的默认运行时；V16 仅�
 
 真实 LLM 返回的计划、动作和报告草稿还要经过 Pydantic Contract（结构合同）、PlanValidator（计划校验）和 Tool Registry（工具白名单）。V16 已修复 DeepSeek 选择 `search_clinical_metrics` 后返回列表、而运行时错误地假定所有工具都有 `.rows` 的协议不一致；现在指标检索会统一包装成结构化工具结果，并产生中性的 `metric_context（指标上下文）` 观测。V17 的 DeepSeek/OpenAI/GLM/Kimi/自定义兼容模型通过 PydanticAI 的 typed output（类型化输出）适配器接入，Claude 通过原生 Anthropic provider 接入；没有配置密钥时会明确报错，不会静默退回假数据。
 
-## Task Map（任务地图）
+## 产品版本（Product Versions）
 
-| Task | 能力 | 状态 |
-| ---: | --- | --- |
-| 1 | PostgreSQL、dbt、临床指标和合成场景 | 已完成 |
-| 2 | 多步自主调查、假设和证据链 | 已完成 |
-| 3 | SQL 安全、范围控制、小样本抑制和审批 | 已完成 |
-| 4 | 临床工具、结论校验和 Benchmark | 已完成 |
-| 5 | CDISC 导入、发布门禁、版本绑定和撤回 | 已完成 |
-| 6 | 持久任务、Worker、租约、健康检查和 CI | 已完成 |
-| 7 | Excel/CSV/JSON 等异构文件理解 | 已完成 |
-| 8 | Observation-driven Agent Runtime（观测驱动运行时） | 已完成 |
-| 9 | 开放临床核心、数据域插件和公开数据验收 | 已完成 |
-| 10 | 问题编译、研究注册、药品标签、FAERS、EHR 专用 marts / tools / UI | **已完成** |
-| 11 | 观测驱动动态调查、批次治理与跨空间 DeepSeek 验收 | **已完成** |
-| 12 | 动态数据目录 | **已完成（V15）** |
-| 13 | 置信区间、正式缺失机制和多维交叉统计 | V17 运行时基础已完成；统计能力按数据域继续扩展 |
-| 14 | 更大规模临床验证夹具与 50 题批量 DeepSeek 评测 | 部分完成（夹具已扩容；V17 held-out contract eval 已加入） |
-| 15 | 真实身份、细粒度权限、密钥托管、监控与灾备 | 计划中（V19） |
-| 16 | V17 强类型 Graph、PydanticAI 与 MCP 边界 | 已完成（V17） |
-| 17 | Redis 运行时端口、幂等锁与 Temporal 类型边界 | **已完成（V18，Temporal Worker 待 V19）** |
-| 18 | 脱敏追踪、审批恢复令牌与 Temporal Workflow/Worker 外壳 | **已完成（V19 边界；真实集群待部署）** |
-| 19 | Temporal Activity、独立 Worker、工作流启动与审批恢复 HTTP 接口 | **已完成（V20；真实集群和长流程验收待部署）** |
-| 20 | 审批事务发件箱、失败重试、重复信号幂等、取消与审批超时 | **已完成（V21；真实集群运维验收待部署）** |
-| 21 | 自动发件箱投递器、可选本地 Temporal 集群、真实 Workflow/Activity 启动与取消验收 | **已完成（V22；DeepSeek 长流程与生产集群仍待部署验收）** |
-| 22 | Temporal 状态查询、Activity 重试幂等和不可修复错误不重试 | **已完成（V23；DeepSeek 长流程评测待 V24）** |
-| 23 | Graph 节点级检查点、事件脱敏与恢复不重复查询 | **已完成（V25）** |
+| 版本 | 产品阶段 | 主要能力 | 状态 |
+| --- | --- | --- | --- |
+| V1 | Clinical Data Foundation | PostgreSQL、dbt、临床指标、CDISC 导入与发布、数据域插件、SQL 安全、小样本抑制和审批 | 已完成 |
+| V2 | Governed Agent Runtime | 动态调查、问题编译、证据链、数据目录、PydanticAI + Pydantic Graph、MCP-compatible Gateway、Redis / Temporal 可恢复边界 | 已完成 |
+| V3 | Graph Clinical Platform | Graph 节点检查点与重放、PostgreSQL 事务/CAS/并发安全、Temporal outbox、纵向 EHR 聚合、隐私审计、版本化 reference-range catalog | **当前版本** |
 
-项目路线图属于开发管理资料，不放进产品 UI；完整路线图保存在本机侧边栏 Markdown，不上传到产品仓库。左侧“数据目录”可直接查看 V15 从数据库发现的真实字段和指标候选。
+内部 V 编号只用于实现迁移和文档定位；公开产品以 V1、V2、V3 三个版本维护。项目路线图属于开发管理资料，不放进产品 UI；左侧“数据目录”可直接查看实际发现的字段和指标候选。
 
 ## 当前能验收的问题
 
