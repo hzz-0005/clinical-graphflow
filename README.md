@@ -279,3 +279,5 @@ examples/                   可上传的合成 CDISC 样例
 - FAERS 报告里的药物与反应是报告内共现，不能解释为逐一因果配对。
 - Synthetic Data（合成数据）可以验证工程链路，不能用于声称真实临床疗效。
 
+贡献规范见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，安全问题请参考 [`SECURITY.md`](SECURITY.md)。
+
