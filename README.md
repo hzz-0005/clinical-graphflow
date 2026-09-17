@@ -2,7 +2,7 @@
 
 > Governed Autonomous Clinical Investigation Agent（受治理的临床自主调查智能体）
 
-InsightFlow Clinical 不是“给数据库套一个聊天框”，也不是让 LLM（大模型）自由生成 SQL。它把临床问题转成一个可复核的 Investigation（调查）：识别指标、读取已发布数据版本、生成假设、调用受治理工具、寻找支持与反证、披露缺失数据，最后输出 Evidence Chain（证据链）和待审批结论。
+InsightFlow Clinical 不是“给数据库套一个聊天框”，也不是让 LLM（大模型）自由生成 SQL。它把临床问题转成一个可复核的 Investigation（调查）：识别范围和指标、读取已发布数据版本、生成结构化计划、按任务提出假设、调用受治理工具、把结果解释为 Observation（观测）和 Evidence（证据），披露缺失数据，最后输出证据链和待审批结论。
 
 当前公开版本：**V3 / Graph Edition**。公开版本把内部迭代收敛为三个产品阶段：V1 建立临床数据与治理底座，V2 建立可恢复的 PydanticAI / Pydantic Graph 运行时，V3（当前）完成 PostgreSQL 并发安全、纵向 EHR、隐私抑制和版本化 reference-range catalog。当前 Synthea 数据不携带经过审核的医学参考范围，因此未加载真实 catalog 时异常比例保持 `unknown`/`NULL`。数据目录说明见 [`docs/V15_DATA_CATALOG.md`](docs/V15_DATA_CATALOG.md)，运行时说明见 [`docs/V17_RUNTIME.md`](docs/V17_RUNTIME.md)，纵向 EHR 说明见 [`docs/V27_LONGITUDINAL_EHR.md`](docs/V27_LONGITUDINAL_EHR.md)，reference catalog 加载说明见 [`docs/V27_REFERENCE_RANGE_CATALOG.md`](docs/V27_REFERENCE_RANGE_CATALOG.md)。开发过程中的路线图、验收记录和临时排练资料不进入 GitHub 产品仓库。
 
@@ -10,11 +10,11 @@ InsightFlow Clinical 不是“给数据库套一个聊天框”，也不是让 L
 
 | 输入 | 系统实际做什么 | 输出 |
 | --- | --- | --- |
-| 任意临床研究问题 | LLM 只选择一个已注册工具；确定性程序执行参数化只读查询 | 结构化观测、假设状态、证据链、限制和结论 |
+| 临床调查问题 | PydanticAI 在 `generate_plan` 输出结构化计划；Graph 校验并循环执行计划任务，`synthesize_report` 生成受校验的报告 | 结构化观测、假设状态、证据链、限制和结论 |
 | CSV / Excel / JSON 等异构文件 | 隔离、画像、关系发现、数据域匹配、转换校验、审批和版本发布 | 可审计 Mapping Contract（映射合同）与 Published Batch（发布批次） |
 | 研究注册、安全报告、合成 EHR | 按来源类别分开建模，不混为受试者级试验数据 | 研究元数据、安全信号或合成患者数据域 |
 
-核心原则：**程序负责数字与治理，LLM 负责受约束的下一步决策和解释。**
+核心原则：**确定性 Graph 负责控制流与治理，LLM 只在代码明确调用的节点中提供受约束的计划和报告合成。**
 
 ## 它不是什么
 
@@ -24,45 +24,97 @@ InsightFlow Clinical 不是“给数据库套一个聊天框”，也不是让 L
 - 不是只能处理药物的固定数据库；Drug（药物）、Device（器械）、Procedure（手术/操作）、Behavioral（行为干预）是并列干预类型。
 - 不是“任何文件上传后立刻都能回答任何问题”；文件可治理发布与拥有专用分析插件是两层能力。
 
-## 调查闭环
+## Investigation Runtime Flow（调查运行流程）
 
 ```mermaid
-flowchart LR
-    Q[Clinical Question<br/>临床问题] --> C[Governed Context<br/>指标与数据版本]
-    C --> H[Hypotheses<br/>结构化假设]
-    H --> T[One Governed Tool<br/>单步受治理工具]
-    T --> O[Observation<br/>结构化观测]
-    O --> E[Support / Contradict<br/>支持或反证]
-    E -->|证据不足| T
-    E -->|证据闭合| V[Verification<br/>结论校验]
-    V --> R[Evidence Report<br/>证据报告与审批]
+flowchart TB
+    Q[User question<br/>用户问题] --> C[load_context<br/>已发布数据域与工具能力]
+    C --> P[generate_plan<br/>PydanticAI typed plan]
+    P --> V[validate_plan<br/>计划与工具校验]
+    V -->|valid| S[select_task<br/>选择就绪任务]
+    V -->|invalid| G[close_with_gap<br/>说明缺口]
+    S -->|ready| H[propose_hypothesis<br/>计划假设或确定性回退]
+    H --> X[execute_task]
+    X --> M[MCP-compatible Gateway]
+    M --> T[registered tool<br/>参数化只读执行]
+    T --> O[interpret_observation<br/>结构化观测]
+    O --> E[record Evidence<br/>更新共享状态]
+    E --> A[advance_task]
+    A --> S
+    S -->|none ready| K[verify_coverage]
+    K -->|complete| R[synthesize_report<br/>PlanAnswer + 覆盖校验]
+    K -->|continue / gap| G
+    R --> F[finish<br/>持久化图快照与 API 投影]
+    G --> F
 ```
 
-模型不能绕过 Tool Registry（工具注册表）、Data Scope（数据范围）、Metric Definition（指标定义）、SQL Safety（SQL 安全）、Minimum Cell Size（小样本抑制）和 Approval Gate（审批门禁）。`no_data（无数据）` 与 `insufficient_data（数据不足）` 只能成为限制，不能被写成支持或反驳。
+核心循环是 **Hypothesis → Action → Observation → Evidence → State Update → Next Task**（提出假设 → 执行动作 → 获得观测 → 形成证据 → 更新状态 → 选择下一任务）。模型不能绕过 Tool Registry（工具注册表）、Data Scope（数据范围）、Metric Definition（指标定义）、SQL Safety（SQL 安全）、Minimum Cell Size（小样本抑制）和 Approval Gate（审批门禁）。`no_data（无数据）` 与 `insufficient_data（数据不足）` 只能成为限制或不确定结果，不能被写成支持事实。
+
+> 这张图表达的是 v17 Pydantic Graph 的真实任务级循环。当前实现不会在覆盖缺口后无限生成新计划或假设树；没有可引用证据时会诚实进入 `close_with_gap`。完整节点、分支和状态字段见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
 ## 系统架构
 
 ```mermaid
 flowchart TB
-    UI[React Workspace] --> API[FastAPI Control Plane]
+    USER[User / 用户] --> UI[React Clinical Workspace]
+    UI --> API[FastAPI Control Plane]
+    API --> RF[Runtime Factory]
 
-    API --> DATA[数据治理<br/>Quarantine → Registry → Published → dbt]
-    DATA --> PG[(PostgreSQL 18)]
+    subgraph GRAPH["v17 Investigation Graph · single workflow boundary"]
+        STATE[(InvestigationGraphState<br/>共享强类型状态)]
+        ROUTE[route_question]
+        CONTEXT[load_context]
+        PLAN[generate_plan]
+        VALIDATE[validate_plan]
+        SELECT[select_task]
+        HYPOTHESIS[propose_hypothesis]
+        EXECUTE[execute_task]
+        OBSERVE[interpret_observation]
+        ADVANCE[advance_task]
+        COVERAGE[verify_coverage]
+        REPORT[synthesize_report]
+        CLOSE[close_with_gap]
+        FINISH[finish]
 
-    API -->|结构化计划| LLM[DeepSeek / GPT / Claude<br/>GLM / Kimi]
-    LLM --> GRAPH[Pydantic Graph<br/>+ MCP Gateway]
-    GRAPH -->|参数化只读查询| PG
-    GRAPH <-->|缓存 · 检查点 · 幂等| REDIS[(Redis)]
-    GRAPH --> TRACE[OpenTelemetry / Logfire<br/>脱敏运行追踪]
+        ROUTE --> CONTEXT --> PLAN --> VALIDATE --> SELECT
+        SELECT --> HYPOTHESIS --> EXECUTE --> OBSERVE --> ADVANCE --> SELECT
+        SELECT --> COVERAGE
+        COVERAGE -->|complete| REPORT --> FINISH
+        COVERAGE -->|continue / gap| CLOSE --> FINISH
+        STATE -. "read / update" .-> ROUTE
+        STATE -. "read / update" .-> PLAN
+        STATE -. "read / update" .-> SELECT
+        STATE -. "read / update" .-> OBSERVE
+        STATE -. "read / update" .-> REPORT
+    end
 
-    API -->|可选长流程| TEMPORAL[Temporal Workflow / Worker]
-    TEMPORAL -->|执行调查| GRAPH
-    GRAPH -->|报告草稿| PG
-    UI -->|人工审批| API
-    API -->|审批决定 + Outbox| PG
-    PG --> OUTBOX[Outbox Dispatcher]
-    OUTBOX -->|审批信号| TEMPORAL
+    RF --> ROUTE
+    PLAN -. "planner.plan()" .-> LLM[PydanticAI / ClinicalRuntimeLLM]
+    REPORT -. "planner.synthesize_plan()" .-> LLM
+
+    EXECUTE -->|ToolCallRequest| GATEWAY[MCP-compatible Gateway]
+    GATEWAY --> REGISTRY[ClinicalToolRegistry]
+    REGISTRY --> TOOLS[ClinicalTools<br/>governed plugins]
+    TOOLS --> ADAPTER[ClinicalAnalyticsAdapter]
+    ADAPTER --> MARTS[(PostgreSQL analytics marts)]
+    MARTS --> ADAPTER
+    GATEWAY -->|MCPToolResult| OBSERVE
+
+    RAW[(PostgreSQL raw / ingestion)] --> DBT[dbt<br/>staging → core → marts]
+    DBT --> MARTS
+
+    GRAPH -. "runtime ports" .-> REDIS[(Redis optional<br/>cache · checkpoint · events · idempotency)]
+    GRAPH -. "telemetry" .-> OTEL[OpenTelemetry / Logfire adapter<br/>脱敏运行追踪]
+    API -. "optional durable workflow" .-> TEMPORAL[Temporal Workflow / Worker]
+    TEMPORAL -. "one activity invokes the same runtime" .-> RF
+
+    API -->|public /api/v10 route| PUBLIC[PublicClinicalInvestigator<br/>separate governed compiler]
+    PUBLIC -->|public staging / marts| MARTS
 ```
+
+图中各层的含义是：Graph 管控制流，`InvestigationGraphState` 管共享状态，PydanticAI/LLM 只在计划和报告节点提供类型化推理，MCP-compatible Gateway 管工具边界，注册工具负责执行，PostgreSQL 管数据，dbt 管转换与建模，Temporal（可选）管外层可靠执行。Redis 与 OpenTelemetry/Logfire 是可选外围端口，不是临床事实来源。MCP Gateway 不替模型决定调查方向，也不是 Graph 的同一个组件。
+
+`/api/v10/clinical` 的公开数据调查是独立的 `PublicClinicalInvestigator` 路径，不应与 v17 Graph 画成同一条执行链。完整代码审计版架构说明见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
 两层数据表示避免“万能大表”：
 
@@ -134,21 +186,23 @@ V17 现在是同步 API 和动态后台 Job/Worker 的默认运行时；V16 仅�
 
 ```text
 用户问题
-→ PydanticAI 输出 InvestigationPlan（结构化调查计划）
-→ PlanValidator 校验任务、指标、维度和数据域
-→ Pydantic Graph 执行 route / context / plan / hypothesis / tool / observation / coverage / report 节点
-→ MCP-compatible Gateway 再次校验工具、参数和只读 SQL
-→ PostgreSQL 事实查询
+→ PydanticAI `planner.plan()` 输出 InvestigationPlan（结构化调查计划）
+→ PlanValidator 校验任务、指标、维度和数据域并绑定注册工具
+→ Pydantic Graph 执行真实节点和任务级循环
+→ MCP-compatible Gateway 校验 ToolCallRequest、参数和只读 SQL
+→ 注册工具经 PostgreSQL 适配器查询受治理 marts
+→ `interpret_observation` 形成 Observation / Evidence 并更新 Graph State
+→ `synthesize_report` 调用 `planner.synthesize_plan()`，再经覆盖与引用校验
 → Evidence Chain（证据链）与审批门禁
 ```
 
-图节点只传递 `InvestigationGraphState`，模型没有 SQL 入口。V18 通过 `INSIGHTFLOW_RUNTIME_PORTS=memory|redis` 选择内存或 Redis 端口；Redis 只用于短期缓存、检查点、事件和幂等锁，不能作为临床事实库。V19 增加脱敏 OpenTelemetry/Logfire 适配器、版本绑定的审批恢复令牌和可注册的 Temporal Workflow/Worker 外壳；V20 再把 Activity、独立 Worker、工作流启动和令牌保护的审批恢复接口接通；V21 增加审批发件箱、重试、取消和超时，使跨 PostgreSQL 与 Temporal 的边界可恢复；V22 由独立 `clinical-temporal-outbox` 进程自动轮询并投递审批信号，并提供可选的本地 Temporal Server、Temporal UI 与 Temporal 专用 PostgreSQL；V23 增加工作流状态查询和 Activity 重试幂等；V25 把 Graph 检查点前移到节点级，并对事件做脱敏，恢复时复用计划和完成任务。完整迁移边界和回退方式见 [`docs/V17_RUNTIME.md`](docs/V17_RUNTIME.md)、[`docs/V18_DURABLE_RUNTIME.md`](docs/V18_DURABLE_RUNTIME.md)、[`docs/V19_ENTERPRISE_RUNTIME.md`](docs/V19_ENTERPRISE_RUNTIME.md)、[`docs/V20_TEMPORAL_OPERATIONS.md`](docs/V20_TEMPORAL_OPERATIONS.md)、[`docs/V21_DURABLE_OPERATIONS.md`](docs/V21_DURABLE_OPERATIONS.md)、[`docs/V22_TEMPORAL_DEPLOYMENT.md`](docs/V22_TEMPORAL_DEPLOYMENT.md)、[`docs/V23_TEMPORAL_RESILIENCE.md`](docs/V23_TEMPORAL_RESILIENCE.md) 与 [`docs/V25_RUNTIME_RESUME_REPLAY.md`](docs/V25_RUNTIME_RESUME_REPLAY.md)。
+Graph 节点只传递并更新 `InvestigationGraphState`，模型没有 SQL 入口。`generate_plan` 和 `synthesize_report` 是当前 v17 Graph 中实际调用 LLM 的节点；`propose_hypothesis` 使用计划内假设或确定性回退，`interpret_observation` 使用确定性解释器。V18 通过 `INSIGHTFLOW_RUNTIME_PORTS=memory|redis` 选择内存或 Redis 端口；Redis 只用于短期缓存、检查点、事件和幂等锁，不能作为临床事实库。V19 增加脱敏 OpenTelemetry/Logfire 适配器、版本绑定的审批恢复令牌和可注册的 Temporal Workflow/Worker 外壳；V20 再把 Activity、独立 Worker、工作流启动和令牌保护的审批恢复接口接通；V21 增加审批发件箱、重试、取消和超时，使跨 PostgreSQL 与 Temporal 的边界可恢复；V22 由独立 `clinical-temporal-outbox` 进程自动轮询并投递审批信号，并提供可选的本地 Temporal Server、Temporal UI 与 Temporal 专用 PostgreSQL；V23 增加工作流状态查询和 Activity 重试幂等；V25 把 Graph 检查点前移到节点级，并对事件做脱敏，恢复时复用计划和完成任务。完整迁移边界和回退方式见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 以及 [`docs/V17_RUNTIME.md`](docs/V17_RUNTIME.md)、[`docs/V18_DURABLE_RUNTIME.md`](docs/V18_DURABLE_RUNTIME.md)、[`docs/V19_ENTERPRISE_RUNTIME.md`](docs/V19_ENTERPRISE_RUNTIME.md)、[`docs/V20_TEMPORAL_OPERATIONS.md`](docs/V20_TEMPORAL_OPERATIONS.md)、[`docs/V21_DURABLE_OPERATIONS.md`](docs/V21_DURABLE_OPERATIONS.md)、[`docs/V22_TEMPORAL_DEPLOYMENT.md`](docs/V22_TEMPORAL_DEPLOYMENT.md)、[`docs/V23_TEMPORAL_RESILIENCE.md`](docs/V23_TEMPORAL_RESILIENCE.md) 与 [`docs/V25_RUNTIME_RESUME_REPLAY.md`](docs/V25_RUNTIME_RESUME_REPLAY.md)。
 
 ## LLM Provider（大模型供应商）
 
 动态调查支持 `fake（本地确定性）`、OpenAI、Claude、DeepSeek、GLM、Kimi 和自定义 OpenAI-compatible Provider（兼容供应商）。密钥只写入本地 `.env`，不得提交 Git。
 
-真实 LLM 返回的计划、动作和报告草稿还要经过 Pydantic Contract（结构合同）、PlanValidator（计划校验）和 Tool Registry（工具白名单）。V16 已修复 DeepSeek 选择 `search_clinical_metrics` 后返回列表、而运行时错误地假定所有工具都有 `.rows` 的协议不一致；现在指标检索会统一包装成结构化工具结果，并产生中性的 `metric_context（指标上下文）` 观测。V17 的 DeepSeek/OpenAI/GLM/Kimi/自定义兼容模型通过 PydanticAI 的 typed output（类型化输出）适配器接入，Claude 通过原生 Anthropic provider 接入；没有配置密钥时会明确报错，不会静默退回假数据。
+真实 LLM 返回的调查计划和报告草稿还要经过 Pydantic Contract（结构合同）、PlanValidator（计划校验）、CoverageVerifier（覆盖与引用校验）和 Tool Registry（工具白名单）。Graph 不接受模型直接给出的 SQL 或未注册动作。V16 已修复 DeepSeek 选择 `search_clinical_metrics` 后返回列表、而运行时错误地假定所有工具都有 `.rows` 的协议不一致；现在指标检索会统一包装成结构化工具结果，并产生中性的 `metric_context（指标上下文）` 观测。V17 的 DeepSeek/OpenAI/GLM/Kimi/自定义兼容模型通过 PydanticAI 的 typed output（类型化输出）适配器接入，Claude 通过原生 Anthropic provider 接入；没有配置密钥时会明确报错，不会静默退回假数据。
 
 ## 产品版本（Product Versions）
 
@@ -248,4 +302,5 @@ examples/                   可上传的合成 CDISC 样例
 - Synthetic Data（合成数据）可以验证工程链路，不能用于声称真实临床疗效。
 
 贡献规范见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，安全问题请参考 [`SECURITY.md`](SECURITY.md)。
+
 
