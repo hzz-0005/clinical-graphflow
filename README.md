@@ -58,61 +58,23 @@ flowchart TB
 flowchart TB
     USER[User / 用户] --> UI[React Clinical Workspace]
     UI --> API[FastAPI Control Plane]
-    API --> RF[Runtime Factory]
+    API --> GRAPH[Investigation Graph<br/>Workflow / Control Flow]
+    STATE[(InvestigationGraphState<br/>Shared State)] -. "read / update" .-> GRAPH
 
-    subgraph GRAPH["v17 Investigation Graph · single workflow boundary"]
-        STATE[(InvestigationGraphState<br/>共享强类型状态)]
-        ROUTE[route_question]
-        CONTEXT[load_context]
-        PLAN[generate_plan]
-        VALIDATE[validate_plan]
-        SELECT[select_task]
-        HYPOTHESIS[propose_hypothesis]
-        EXECUTE[execute_task]
-        OBSERVE[interpret_observation]
-        ADVANCE[advance_task]
-        COVERAGE[verify_coverage]
-        REPORT[synthesize_report]
-        CLOSE[close_with_gap]
-        FINISH[finish]
+    GRAPH -. "plan + report only" .-> LLM[PydanticAI / LLM<br/>typed decisions]
+    GRAPH -->|ToolCallRequest| MCP[MCP-compatible Gateway<br/>tool boundary]
+    MCP --> TOOLS[Registered governed Tools<br/>actual execution]
+    TOOLS --> DATA[(PostgreSQL<br/>facts · marts · evidence)]
+    DATA -->|Tool result| GRAPH
+    GRAPH -->|evidence + graph snapshot| DATA
 
-        ROUTE --> CONTEXT --> PLAN --> VALIDATE --> SELECT
-        SELECT --> HYPOTHESIS --> EXECUTE --> OBSERVE --> ADVANCE --> SELECT
-        SELECT --> COVERAGE
-        COVERAGE -->|complete| REPORT --> FINISH
-        COVERAGE -->|continue / gap| CLOSE --> FINISH
-        STATE -. "read / update" .-> ROUTE
-        STATE -. "read / update" .-> PLAN
-        STATE -. "read / update" .-> SELECT
-        STATE -. "read / update" .-> OBSERVE
-        STATE -. "read / update" .-> REPORT
-    end
-
-    RF --> ROUTE
-    PLAN -. "planner.plan()" .-> LLM[PydanticAI / ClinicalRuntimeLLM]
-    REPORT -. "planner.synthesize_plan()" .-> LLM
-
-    EXECUTE -->|ToolCallRequest| GATEWAY[MCP-compatible Gateway]
-    GATEWAY --> REGISTRY[ClinicalToolRegistry]
-    REGISTRY --> TOOLS[ClinicalTools<br/>governed plugins]
-    TOOLS --> ADAPTER[ClinicalAnalyticsAdapter]
-    ADAPTER --> MARTS[(PostgreSQL analytics marts)]
-    MARTS --> ADAPTER
-    GATEWAY -->|MCPToolResult| OBSERVE
-
-    RAW[(PostgreSQL raw / ingestion)] --> DBT[dbt<br/>staging → core → marts]
-    DBT --> MARTS
-
-    GRAPH -. "runtime ports" .-> REDIS[(Redis optional<br/>cache · checkpoint · events · idempotency)]
-    GRAPH -. "telemetry" .-> OTEL[OpenTelemetry / Logfire adapter<br/>脱敏运行追踪]
-    API -. "optional durable workflow" .-> TEMPORAL[Temporal Workflow / Worker]
-    TEMPORAL -. "one activity invokes the same runtime" .-> RF
-
-    API -->|public /api/v10 route| PUBLIC[PublicClinicalInvestigator<br/>separate governed compiler]
-    PUBLIC -->|public staging / marts| MARTS
+    RAW[(PostgreSQL raw / ingestion)] --> DBT[dbt<br/>staging → core → marts] --> DATA
+    API -. "optional durable path" .-> TEMP[Temporal<br/>retry · timeout · approval]
+    TEMP -. "same runtime activity" .-> GRAPH
+    GRAPH -. "optional ports" .-> OPS[Redis + OpenTelemetry / Logfire<br/>coordination · telemetry]
 ```
 
-图中各层的含义是：Graph 管控制流，`InvestigationGraphState` 管共享状态，PydanticAI/LLM 只在计划和报告节点提供类型化推理，MCP-compatible Gateway 管工具边界，注册工具负责执行，PostgreSQL 管数据，dbt 管转换与建模，Temporal（可选）管外层可靠执行。Redis 与 OpenTelemetry/Logfire 是可选外围端口，不是临床事实来源。MCP Gateway 不替模型决定调查方向，也不是 Graph 的同一个组件。
+这是一张总览图：Graph 管控制流，`InvestigationGraphState` 管共享状态，PydanticAI/LLM 只在计划和报告节点提供类型化推理，MCP-compatible Gateway 管工具边界，注册工具负责执行，PostgreSQL 管数据与证据，dbt 管转换与建模，Temporal（可选）管外层可靠执行。Redis 与 OpenTelemetry/Logfire 是可选外围端口，不是临床事实来源。MCP Gateway 不替模型决定调查方向，也不是 Graph 的同一个组件。真实节点和分支请看 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
 `/api/v10/clinical` 的公开数据调查是独立的 `PublicClinicalInvestigator` 路径，不应与 v17 Graph 画成同一条执行链。完整代码审计版架构说明见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
@@ -302,5 +264,6 @@ examples/                   可上传的合成 CDISC 样例
 - Synthetic Data（合成数据）可以验证工程链路，不能用于声称真实临床疗效。
 
 贡献规范见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，安全问题请参考 [`SECURITY.md`](SECURITY.md)。
+
 
 
