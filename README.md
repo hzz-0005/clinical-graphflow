@@ -4,7 +4,7 @@
 
 InsightFlow Clinical 不是“给数据库套一个聊天框”，也不是让 LLM（大模型）自由生成 SQL。它把临床问题转成一个可复核的 Investigation（调查）：识别范围和指标、读取已发布数据版本、生成结构化计划、按任务提出假设、调用受治理工具、把结果解释为 Observation（观测）和 Evidence（证据），披露缺失数据，最后输出证据链和待审批结论。
 
-当前公开版本：**V3 / Graph Edition**。公开版本把内部迭代收敛为三个产品阶段：V1 建立临床数据与治理底座，V2 建立可恢复的 PydanticAI / Pydantic Graph 运行时，V3（当前）完成 PostgreSQL 并发安全、纵向 EHR、隐私抑制和版本化 reference-range catalog。当前 Synthea 数据不携带经过审核的医学参考范围，因此未加载真实 catalog 时异常比例保持 `unknown`/`NULL`。数据目录说明见 [`docs/V15_DATA_CATALOG.md`](docs/V15_DATA_CATALOG.md)，运行时说明见 [`docs/V17_RUNTIME.md`](docs/V17_RUNTIME.md)，纵向 EHR 说明见 [`docs/V27_LONGITUDINAL_EHR.md`](docs/V27_LONGITUDINAL_EHR.md)，reference catalog 加载说明见 [`docs/V27_REFERENCE_RANGE_CATALOG.md`](docs/V27_REFERENCE_RANGE_CATALOG.md)。开发过程中的路线图、验收记录和临时排练资料不进入 GitHub 产品仓库。
+当前公开版本：**V3 / Graph Edition**。公开版本把内部迭代收敛为三个产品阶段：V1 建立临床数据与治理底座，V2 建立可恢复的 PydanticAI / Pydantic Graph 运行时，V3（当前）完成 PostgreSQL 并发安全、纵向 EHR、隐私抑制和版本化 reference-range catalog。当前 Synthea 数据不携带经过审核的医学参考范围，因此未加载真实 catalog 时异常比例保持 `unknown`/`NULL`。数据目录说明见 [`docs/V15_DATA_CATALOG.md`](docs/V15_DATA_CATALOG.md)，运行时说明见 [`docs/V17_RUNTIME.md`](docs/V17_RUNTIME.md)，纵向 EHR 说明见 [`docs/V27_LONGITUDINAL_EHR.md`](docs/V27_LONGITUDINAL_EHR.md)，reference catalog 加载说明见 [`docs/V27_REFERENCE_RANGE_CATALOG.md`](docs/V27_REFERENCE_RANGE_CATALOG.md)。
 
 ## 一眼看懂
 
@@ -110,7 +110,7 @@ Upload（上传）
 
 ## Public Data Validation（公开数据验收）
 
-V16 使用五类性质不同的公开来源，下载文件保存在 git 忽略的 `.data/`，不把大体量样本和外部数据重新发布到仓库。本机当前快照已扩容；数量是实际验收值，不是接口总量：
+项目使用五类性质不同的公开来源。大体量外部文件由 `.data/` 管理，不重复分发；下表数量是当前数据快照的验收值，不是来源接口总量：
 
 | 来源类别 | 来源 | 本次实测 | 使用边界 |
 | --- | --- | ---: | --- |
@@ -121,7 +121,7 @@ V16 使用五类性质不同的公开来源，下载文件保存在 git 忽略�
 | Synthetic Patient（官方合成患者样例） | Synthea | 108 名合成患者，102,808 行已注册记录（完整快照含 201,657 行，6 个账单文件仍隔离） | 可做工程兼容测试，不代表真实患者或真实疗效 |
 | Subject-level Trial Fixture（受试者级临床试验夹具） | 本地可复现合成数据 | 3,000 名受试者；6,000 条 Week-4/Week-12 结局；36,000 条给药记录 | 仅用于验证治疗组比较、缺失、依从性和中心下钻；不是网上下载的真实患者数据 |
 
-以上公开快照已经通过“下载—规范化—映射—校验—治理发布”。跨全球与中国地点快照重叠的研究会在 `mart_study_registry` 按研究编号去重，当前数据库目录显示 132,991 项唯一研究、10,000 份标签、12,188 种 FAERS 药物和 108 名合成患者；公开数据批次共 1,879,253 条规范化记录。原始文件保存在本机 `.data/`，不进入仓库。
+以上公开快照已经通过“下载—规范化—映射—校验—治理发布”。跨全球与中国地点快照重叠的研究会在 `mart_study_registry` 按研究编号去重，当前数据库目录显示 132,991 项唯一研究、10,000 份标签、12,188 种 FAERS 药物和 108 名合成患者；公开数据批次共 1,879,253 条规范化记录。
 
 受试者级临床试验夹具已单独扩容到 3,000 名，避免常用总体/地区/治疗组问题因随机格子小于 10 而全部被抑制；`SITE-18/control` 仍刻意保留为不足 10 的格子，用于验证小样本保护不会被绕过。该夹具与公开注册元数据、FAERS 和药品标签严格分开，不能把注册信息当成疗效结果。
 
@@ -174,7 +174,7 @@ Graph 节点只传递并更新 `InvestigationGraphState`，模型没有 SQL 入�
 | V2 | Governed Agent Runtime | 动态调查、问题编译、证据链、数据目录、PydanticAI + Pydantic Graph、MCP-compatible Gateway、Redis / Temporal 可恢复边界 | 已完成 |
 | V3 | Graph Clinical Platform | Graph 节点检查点与重放、PostgreSQL 事务/CAS/并发安全、Temporal outbox、纵向 EHR 聚合、隐私审计、版本化 reference-range catalog | **当前版本** |
 
-内部 V 编号只用于实现迁移和文档定位；公开产品以 V1、V2、V3 三个版本维护。项目路线图属于开发管理资料，不放进产品 UI；左侧“数据目录”可直接查看实际发现的字段和指标候选。
+内部 V 编号只用于实现迁移和文档定位；公开产品以 V1、V2、V3 三个版本维护。左侧“数据目录”可直接查看实际发现的字段和指标候选。
 
 ## 当前能验收的问题
 
@@ -193,8 +193,6 @@ Graph 节点只传递并更新 `InvestigationGraphState`，模型没有 SQL 入�
 如果所选发布批次缺少 `AE / EX / LB` 等域，正确行为是明确报告 Data Gap（数据缺口），不是跨版本补数据或编造答案。公开数据已经完成“下载—规范化—映射—校验—治理发布”和对应分析插件接入，可从调查空间选择后输入不同问题。
 
 纵向 EHR 结果始终按 UTC 时间桶和 10 人最小披露阈值聚合。当前 Synthea OBSERVATION 不包含审核过的参考范围，所以异常比例默认显示为 `unknown`/不可用；如有经审核的来源，可按 [`docs/V27_REFERENCE_RANGE_CATALOG.md`](docs/V27_REFERENCE_RANGE_CATALOG.md) 加载 catalog，并在 API 请求中传入 `reference_catalog_version`。
-
-第二轮 DeepSeek 实机验收记录属于开发审计资料，不放进产品 UI，也不上传到产品仓库；需要复盘时在 Codex 侧边栏打开本机 Markdown。动态调查页仍可输入未预设的新问题；验收记录不会限制模型可处理的问题。
 
 V15 目录验收：打开页面左侧“数据目录”，选择 `TRIAL-CF-101`，应看到实际发现的 `ADEFF / ADSL / AE / DM / EX` 数据域、记录数、字段类型和指标/维度候选。也可以直接调用 `GET /api/v15/clinical/catalog?trial_id=TRIAL-CF-101`；返回中不应出现患者行或 `payload_json`。
 
@@ -216,7 +214,7 @@ docker compose ps
 Invoke-RestMethod http://127.0.0.1:18000/ready
 ```
 
-完整临床验收（测试文件保留在开发工作区，不随公开源码上传）：
+临床验收：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
@@ -254,16 +252,15 @@ scripts/                    下载、验收和运维脚本
 examples/                   可上传的合成 CDISC 样例
 ```
 
-旧 V0–V4 中确认不再被运行时、Docker、测试或脚本依赖的代码，以及分散的旧版本文档，已保存在本机 `archive/` 中；该目录不会进入新的 GitHub 仓库。仍被当前运行时依赖的早期基础代码继续留在主路径，不能只按文件名中的版本号误删。
-
 ## 安全边界
 
 - 项目仅用于临床研究数据工程与受治理分析演示，不构成医疗建议。
-- `.env`、API Key、数据库口令、`.data/` 和本地归档都不会提交。
+- `.env`、API Key、数据库口令和外部数据文件不会提交。
 - FAERS 报告里的药物与反应是报告内共现，不能解释为逐一因果配对。
 - Synthetic Data（合成数据）可以验证工程链路，不能用于声称真实临床疗效。
 
 贡献规范见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，安全问题请参考 [`SECURITY.md`](SECURITY.md)。
+
 
 
 
